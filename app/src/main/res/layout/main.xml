@@ -3,23 +3,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center_horizontal|center_vertical"
+    android:gravity="center_horizontal"
     android:orientation="vertical">
-
-    <ImageView
-        android:id="@+id/imageView3"
-        android:layout_width="512px"
-        android:layout_height="512px"
-        android:src="@drawable/campfire_w_sword" />
-
-    <Button
-        android:id="@+id/button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:text="generate bytes"
-        android:textSize="14sp"
-        android:typeface="normal" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -97,5 +82,31 @@
             android:layout_weight="1" />
 
     </LinearLayout>
+
+    <ImageView
+        android:id="@+id/imageView3"
+        android:layout_width="512px"
+        android:layout_height="512px"
+        android:src="@drawable/campfire_w_sword" />
+
+    <Button
+        android:id="@+id/button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="generate bytes"
+        android:textSize="14sp"
+        android:typeface="normal" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <LinearLayout
+            android:id="@+id/list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
 
 </LinearLayout>
