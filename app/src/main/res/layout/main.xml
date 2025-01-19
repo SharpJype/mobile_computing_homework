@@ -1,6 +1,72 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="100dp" />
+
+    <ImageView
+        android:id="@+id/imageView3"
+        android:layout_width="match_parent"
+        android:layout_height="512px"
+        android:src="@drawable/campfire_w_sword" />
+
+    <TextView
+        android:id="@+id/text_byte"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/ubuntumono"
+        android:gravity="center"
+        android:textAlignment="center"
+        android:textColor="#000000"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/text_byte1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/ubuntumono"
+        android:gravity="center"
+        android:textAlignment="center"
+        android:textColor="#000000"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/text_byte2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/ubuntumono"
+        android:gravity="center"
+        android:shadowColor="#101010"
+        android:shadowDx="4"
+        android:shadowDy="2"
+        android:shadowRadius="2"
+        android:textAlignment="center"
+        android:textColor="#000000"
+        android:textSize="34sp" />
+
+    <TextView
+        android:id="@+id/text_byte3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/ubuntumono"
+        android:gravity="center"
+        android:scaleX="3"
+        android:textAlignment="center"
+        android:textColor="#000000"
+        android:textSize="60sp" />
+
+    <Button
+        android:id="@+id/button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="generate bytes"
+        android:textSize="14sp"
+        android:typeface="normal" />
 
 </LinearLayout>
