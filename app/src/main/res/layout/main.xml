@@ -6,82 +6,16 @@
     android:gravity="center_horizontal"
     android:orientation="vertical">
 
-    <LinearLayout
+    <Space
         android:layout_width="match_parent"
+        android:layout_height="10dp" />
+
+    <Button
+        android:id="@+id/buttonSecond"
+        android:layout_width="300dp"
         android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
-        android:orientation="horizontal">
-
-        <Space
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="1" />
-
-        <TextView
-            android:id="@+id/text_byte"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/ubuntumono"
-            android:text="asd"
-            android:textAlignment="center"
-            android:textColor="#000000"
-            android:textSize="14sp" />
-
-        <Space
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="1" />
-
-        <TextView
-            android:id="@+id/text_byte1"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/ubuntumono"
-            android:text="asd"
-            android:textAlignment="center"
-            android:textColor="#000000"
-            android:textSize="14sp" />
-
-        <Space
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="1" />
-
-        <TextView
-            android:id="@+id/text_byte2"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/ubuntumono"
-            android:shadowColor="#101010"
-            android:shadowDx="4"
-            android:shadowDy="2"
-            android:shadowRadius="2"
-            android:text="asd"
-            android:textAlignment="center"
-            android:textColor="#000000"
-            android:textSize="34sp" />
-
-        <Space
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="1" />
-
-        <TextView
-            android:id="@+id/text_byte3"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="casual"
-            android:text="asd"
-            android:textColor="#000000"
-            android:textSize="60sp"
-            android:typeface="normal" />
-
-        <Space
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="1" />
-
-    </LinearLayout>
+        android:backgroundTint="#00BCD4"
+        android:text="second view" />
 
     <ImageView
         android:id="@+id/imageView3"
