@@ -116,7 +116,7 @@ fun SecondView(appState:AppState, primaryNavigationLambda:() -> Unit) {
 @Composable
 fun NavigatableViews() {
     val navController = rememberNavController()
-    val appState = AppState(Random(), remember { mutableStateListOf<GeneratedByte>()})
+    val appState = AppState(remember {Random()}, remember { mutableStateListOf<GeneratedByte>()})
 
     NavHost(navController, startDestination = "primary", modifier = Modifier.layoutId(0)) {
         composable("primary") { backStackEntry ->
