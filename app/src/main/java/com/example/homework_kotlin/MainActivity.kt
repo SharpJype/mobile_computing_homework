@@ -17,8 +17,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,8 +33,18 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.homework_kotlin.ui.theme.Homework_kotlinTheme
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import java.io.File
+
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 import java.math.BigInteger
+import java.util.ArrayList
+import java.util.EventListener
 import java.util.Random
 
 const val FULL_ALPHA: Int = 255 shl 24
@@ -46,30 +58,84 @@ class GeneratedByte (rng:Random) {
     val size = 30F+BigInteger(4, rng).toInt()
 }
 
-data class AppState (
+@Serializable
+data class AppInstallState(
+    // keep statistics since app was first opened
+    var timesOpened:Int = 0,
+    val savedFiles:ArrayList<String> = ArrayList<String>()
+)
+fun saveInstallState(file:File, installState:AppInstallState) {
+    val writeStream = file.outputStream()
+    val bytes = Json.encodeToString(installState).encodeToByteArray()
+    writeStream.write(bytes)
+    writeStream.close()
+}
+fun loadInstallState(file:File):AppInstallState {
+    var installState = AppInstallState()
+    if (file.exists()) {
+        val readStream = file.inputStream()
+        val buffer = ByteArray(file.length().toInt())
+        readStream.read(buffer)
+        readStream.close()
+        installState = Json.decodeFromString<AppInstallState>(buffer.decodeToString())
+    }
+    else {
+        saveInstallState(file, installState)
+    }
+    installState.timesOpened++
+    return installState
+}
+
+
+
+
+data class AppSessionState (
     val rng : Random,
     val list : SnapshotStateList<GeneratedByte>,
+    var installState: AppInstallState,
 )
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent() {
+        setContent {
             Homework_kotlinTheme {
-                NavigatableViews()
+                NavigableViews(this.filesDir)
             }
+        }
+    }
+}
+
+@Composable
+fun CustomEventListener(onEvent:(event:Lifecycle.Event) -> Unit) {
+    val eventHandler = rememberUpdatedState(newValue = onEvent)
+    val lifecycleOwner = rememberUpdatedState(newValue = LocalLifecycleOwner.current)
+
+    DisposableEffect(lifecycleOwner.value ){
+        val lifecycle = lifecycleOwner.value.lifecycle
+        val observer = LifecycleEventObserver{_, event ->
+            eventHandler.value(event)
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
         }
     }
 }
 
 
 
+
+
 @Composable
-fun PrimaryView(appState:AppState, secondaryNavigationLambda:() -> Unit) {
+fun PrimaryView(appState:AppSessionState, secondaryNavigationLambda:() -> Unit) {
     Column (verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth().layoutId("Main")) {
+            modifier = Modifier
+                .fillMaxWidth()
+                .layoutId("Main")) {
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {//modifier = Modifier.weight(1F),
             Spacer(modifier = Modifier.size(20.dp))
@@ -97,7 +163,7 @@ fun PrimaryView(appState:AppState, secondaryNavigationLambda:() -> Unit) {
 }
 
 @Composable
-fun SecondView(appState:AppState, primaryNavigationLambda:() -> Unit) {
+fun SecondView(appState:AppSessionState, primaryNavigationLambda:() -> Unit) {
     Column (verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()) {
@@ -108,18 +174,31 @@ fun SecondView(appState:AppState, primaryNavigationLambda:() -> Unit) {
         }) {
             Text("back")
         }
+        Text(appState.installState.timesOpened.toString())
     }
 }
 
 
 
 @Composable
-fun NavigatableViews() {
+fun NavigableViews(appFileDir:File) {
     val navController = rememberNavController()
-    val appState = AppState(remember {Random()}, remember { mutableStateListOf<GeneratedByte>()})
+    val installFile = File(appFileDir, "installState")
 
+    val appState = AppSessionState(
+        remember {Random()},
+        remember {mutableStateListOf()},
+        remember {loadInstallState(installFile)},
+        //remember {Socket()}
+    )
+
+    CustomEventListener {
+        if (it==Lifecycle.Event.ON_PAUSE) {
+            saveInstallState(installFile, appState.installState)
+        }
+    }
     NavHost(navController, startDestination = "primary", modifier = Modifier.layoutId(0)) {
-        composable("primary") { backStackEntry ->
+        composable("primary") {
             PrimaryView(
                 appState = appState,
                 secondaryNavigationLambda = {
