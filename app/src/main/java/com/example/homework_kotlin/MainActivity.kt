@@ -32,10 +32,12 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -60,9 +62,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
-import com.android.volley.toolbox.ImageRequest
 
 import java.math.BigInteger
 import java.util.ArrayList
@@ -74,16 +74,16 @@ fun randomFullColor(rng:Random):Int {
 }
 
 class GeneratedByte (rng:Random) {
-    val text = BigInteger(8, rng).toString()
+    val value = BigInteger(8, rng).toInt()//.toString()
     val color = randomFullColor(rng)
     val size = 30F+BigInteger(4, rng).toInt()
 }
 
+
 @Serializable
 data class AppInstallState(
-    // keep statistics since app was first opened
-    var timesOpened:Int = 0,
-    val savedFiles:ArrayList<String> = ArrayList<String>()
+    // keep statistics since app was first launched
+    var timesLaunched:Int = 0,
 )
 fun saveInstallState(file:File, installState:AppInstallState) {
     val writeStream = file.outputStream()
@@ -101,10 +101,6 @@ fun loadInstallState(file:File):AppInstallState {
         val withUnknownKeys = Json {ignoreUnknownKeys=true}
         installState = withUnknownKeys.decodeFromString<AppInstallState>(buffer.decodeToString())
     }
-    else {
-        saveInstallState(file, installState)
-    }
-    installState.timesOpened++
     return installState
 }
 
@@ -148,8 +144,13 @@ fun CustomEventListener(onEvent:(event:Lifecycle.Event) -> Unit) {
 }
 
 
+@Serializable
+data class DiceSet(
+    val i:Int,
+)
+
 @Composable
-fun InputView(appState:AppSessionState, navigationLambdas:NavigationLambdas) {
+fun NewDiceSetView(appState:AppSessionState, navigationLambdas:NavigationLambdas) {
     val result = remember { mutableStateOf<Uri?>(null) }
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
@@ -165,7 +166,9 @@ fun InputView(appState:AppSessionState, navigationLambdas:NavigationLambdas) {
             Button(onClick = {navigationLambdas.back()}) {
                 Text("cancel")
             }
-            Button(onClick = {navigationLambdas.back()}) {
+            Button(onClick = {
+                navigationLambdas.back()
+            }) {
                 Text("confirm")
             }
         }
@@ -270,8 +273,28 @@ fun ByteGenView(appState:AppSessionState, navigationLambdas:NavigationLambdas) {
             modifier = Modifier
                 .weight(1F)
         ) {
-            items(appState.list) {
-                    item -> Text(item.text, color = Color(item.color), fontSize = item.size.sp)
+            items(appState.list) {item ->
+                Row {
+                    val color = Color(item.color)
+                    var binary = ""
+                    for (i in 0..7) {
+                        binary += ((item.value shr 7-i)%2).toString()
+                    }
+                    Text(
+                        item.value.toString(),
+                        color = color,
+                        fontSize = item.size.sp,
+                        modifier = Modifier.padding(horizontal = 5.dp)
+                    )
+                    Spacer(modifier = Modifier.weight(1F))
+                    Text(
+                        binary,
+                        color = color,
+                        fontSize = item.size.sp,
+                        modifier = Modifier.padding(horizontal = 5.dp)
+                    )
+                }
+
             }
         }
         Spacer(modifier = Modifier.size(20.dp))
@@ -290,7 +313,7 @@ fun StatisticsView(appState:AppSessionState, navigationLambdas:NavigationLambdas
         ) {
             Text("back")
         }
-        Text("Times opened: "+appState.installState.timesOpened.toString())
+        Text("Times launched: "+appState.installState.timesLaunched.toString())
     }
 }
 
@@ -317,17 +340,30 @@ fun NavigableViews(appFileDir:File) {
     )
     val navigationLambdas = NavigationLambdas(navController)
 
-    CustomEventListener {
-        if (it==Lifecycle.Event.ON_PAUSE) {
-            saveInstallState(installFile, appState.installState)
-        }
+    // detect first launch
+    val launchIndex = rememberSaveable {appState.installState.timesLaunched}
+    if (launchIndex==appState.installState.timesLaunched) {// happens only once per app launch
+        appState.installState.timesLaunched++
+        saveInstallState(installFile, appState.installState)
     }
-    NavHost(navController, startDestination = "primary", modifier = Modifier.layoutId(0)) {
+
+    CustomEventListener {
+        /*if (it == Lifecycle.Event.ON_START) {
+            //appState.installState.timesLaunched++
+            saveInstallState(installFile, appState.installState)
+        }*/
+        /*if (appState.saveInstallState) { // check every event
+            saveInstallState(installFile, appState.installState)
+            appState.saveInstallState = false
+        }*/
+    }
+    NavHost(navController, startDestination = "primary") {
+
         composable("primary") {
             PrimaryView(appState = appState, navigationLambdas = navigationLambdas)
         }
         composable("newDiceSet") {
-            InputView(appState = appState, navigationLambdas = navigationLambdas)
+            NewDiceSetView(appState = appState, navigationLambdas = navigationLambdas)
         }
         composable("byteGen") {
             ByteGenView(appState = appState, navigationLambdas = navigationLambdas)
