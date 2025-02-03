@@ -3,18 +3,14 @@ package com.example.homework_kotlin
 
 import android.content.Context
 import android.graphics.BitmapFactory
-import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
-import android.webkit.MimeTypeMap
-import android.widget.ImageButton
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,16 +30,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -56,17 +48,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.CornerRounding
@@ -82,17 +69,12 @@ import kotlinx.serialization.json.Json
 import java.io.File
 
 import androidx.navigation.NavController
-import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
-import coil.request.ImageRequest
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.shape.MaterialShapeDrawable
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 
-import java.math.BigInteger
 import java.util.Random
 import kotlin.math.absoluteValue
 
@@ -146,7 +128,6 @@ data class AppSessionState (
     var seed: Long,
     val rng : Random,
     val list : SnapshotStateList<GeneratedByte>,
-    var filesDir: File? = null,
     var installState: AppInstallState? = null,
 )
 val appState = AppSessionState(
@@ -160,12 +141,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (appState.installState==null) {
-            appState.seed = BigInteger(16, appState.rng).toLong()
+            appState.seed = appState.rng.nextLong().absoluteValue%(1 shl 16)
             appState.rng.setSeed(appState.seed)
-            appState.filesDir = this.filesDir//
-
             val installFile = File(this.filesDir, INSTALL_STATE_FILENAME)
-            //installFile.delete()// RESET
             appState.installState = loadInstallState(installFile)
         }
         setContent {
@@ -279,7 +257,6 @@ fun NewDiceSetView(navigationLambdas:NavigationLambdas) {
             verticalAlignment=Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 50.dp)
         ) {
-
             Column {
                 TextButton(onClick={
                     amount++
@@ -363,7 +340,7 @@ fun NewDiceSetView(navigationLambdas:NavigationLambdas) {
             imageLauncher.launch(
                 PickVisualMediaRequest(mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly)
             )},
-            modifier = Modifier.height(150.dp).padding(5.dp).fillMaxWidth(),
+            modifier = Modifier.height(if (image.value==null)50.dp else 150.dp).padding(5.dp).fillMaxWidth(),
             contentPadding = PaddingValues(0.dp),
             shape = RectangleShape
         ) {
@@ -399,17 +376,17 @@ fun NewDiceSetView(navigationLambdas:NavigationLambdas) {
                     image.value?.let {
                         var copiedFile:File? = null
                         it.path?.let { it1 ->//use the picked gallery path -> less duplicate images
-                            {copiedFile = File(appState.filesDir, it1)}
+                            {copiedFile = File(context.filesDir, it1)}
                         }
                         if (copiedFile==null) {
-                            copiedFile = File(appState.filesDir, name)
+                            copiedFile = File(context.filesDir, name)
                         }
                         fileFromContentUri(context, it, copiedFile!!)
                         newCollection.imagePath = copiedFile!!.path
                     }
                     dice.forEach { (k, v) -> newCollection.dice[k] = v }
                     appState.installState!!.diceCollections[name] = newCollection
-                    saveInstallState(File(appState.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
+                    saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
                     navigationLambdas.back()
                 }
             }) {
@@ -533,7 +510,7 @@ fun ByteGenView(navigationLambdas:NavigationLambdas) {
     ) {
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Button(onClick = {navigationLambdas.back()}
+            TextButton(onClick = {navigationLambdas.back()}
             ) {
                 Text("back")
             }
@@ -582,7 +559,7 @@ fun StatisticsView(navigationLambdas:NavigationLambdas) {
             .padding(horizontal = 10.dp, vertical = 30.dp)
             .fillMaxWidth()
     ) {
-        Button(onClick = {navigationLambdas.back()}
+        TextButton(onClick = {navigationLambdas.back()}
         ) {
             Text("back")
         }
