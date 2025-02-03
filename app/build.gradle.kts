@@ -77,4 +77,6 @@ dependencies {
     // JSON serialization library, works with the Kotlin serialization plugin
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("io.coil-kt:coil-compose:2.3.0")
+    implementation("androidx.graphics:graphics-shapes:1.0.1")
+
 }

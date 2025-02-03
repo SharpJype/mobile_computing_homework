@@ -3,31 +3,42 @@ package com.example.homework_kotlin
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.MimeTypeMap
+import android.widget.ImageButton
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -43,15 +54,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.graphics.shapes.CornerRounding
+import androidx.graphics.shapes.RoundedPolygon
+import androidx.graphics.shapes.toPath
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -65,6 +85,8 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.shape.MaterialShapeDrawable
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -72,16 +94,17 @@ import java.io.OutputStream
 
 import java.math.BigInteger
 import java.util.Random
+import kotlin.math.absoluteValue
 
 const val FULL_ALPHA: Int = 255 shl 24
 fun randomFullColor(rng:Random):Int {
-    return BigInteger(24, rng).toInt() or FULL_ALPHA
+    return rng.nextInt().absoluteValue or FULL_ALPHA
 }
 
 class GeneratedByte (rng:Random) {
-    val value = BigInteger(8, rng).toInt()//.toString()
-    val color = randomFullColor(rng)
-    val size = 30F+BigInteger(4, rng).toInt()
+    val value = rng.nextInt().absoluteValue%256
+    val color = rng.nextFloat()*360
+    val size = 30F+rng.nextFloat()*30
 }
 
 @Serializable
@@ -180,6 +203,7 @@ fun NewDiceSetView(navigationLambdas:NavigationLambdas) {
     var sides by remember { mutableIntStateOf(6) }
     var dieString by remember { mutableStateOf("") }
     val dice = remember {mutableStateMapOf<Int,Int>()}
+
     fun updateDieString() {
         dieString = amount.toString()+"d"+sides.toString()
     }
@@ -197,15 +221,64 @@ fun NewDiceSetView(navigationLambdas:NavigationLambdas) {
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(10.dp)
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 30.dp)
     ) {
         FlowRow(
             horizontalArrangement = Arrangement.SpaceAround,
-            modifier = Modifier.weight(1F)) {
+            modifier = Modifier
+                .weight(1F)
+                //.padding(vertical = 20.dp)
+                .verticalScroll(rememberScrollState(0))
+        ) {
+            dice.keys.sorted().forEach {
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .padding(5.dp)
+                        .drawWithCache {
+                            val roundedPolygon = RoundedPolygon(
+                            numVertices = 3 + (it-1)/3,
+                            radius = size.minDimension / 2,
+                            centerX = size.width / 2,
+                            centerY = size.height / 2,
+                            rounding = CornerRounding(
+                                size.minDimension / 10f,
+                                smoothing = 0.1f
+                            )
+                        )
+                            val roundedPolygonPath = roundedPolygon.toPath().asComposePath()
+                            onDrawBehind {
+                                drawPath(roundedPolygonPath, color = (
+                                        Color.hsl((0F+it*10)%360, .5F, .4F)
+                                        /*
+                                        if (it.key>9) Color.hsl(0F, .5F, .5F)
+                                        else if (it.key>6) Color.hsl(20F, .5F, .5F)
+                                        else if (it.key>4) Color.hsl(40F, .5F, .5F)
+                                        else Color.hsl(60F, .5F, .5F)*/
+                                        ))
+                            }
+                        }
+                ) {
+                    Row(modifier = Modifier.size(100.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            dice.getValue(it).toString()+"d"+it.toString(),
+                            fontSize = 25.sp,
+                            color = Color.White,
+                        )
+                    }
+                }
+
+            }
 
         }
 
-        Row(verticalAlignment=Alignment.CenterVertically) {
+        Row(
+            verticalAlignment=Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 50.dp)
+        ) {
 
             Column {
                 TextButton(onClick={
@@ -224,9 +297,49 @@ fun NewDiceSetView(navigationLambdas:NavigationLambdas) {
                     Text("-", fontSize = 40.sp)
                 }
             }
-            Spacer(modifier = Modifier.weight(1F))
-            Text(dieString, fontSize = 60.sp)
-            Spacer(modifier = Modifier.weight(1F))
+            //Spacer(modifier = Modifier.weight(1F))
+            Column(
+                modifier = Modifier.weight(1F),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(dieString, fontSize = 60.sp)
+                Row(
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextButton(
+                        onClick={
+                            if (dice.contains(sides)) {
+                                var newAmount = dice.getValue(sides)
+                                newAmount -= amount
+                                if (newAmount<=0) {
+                                    dice.remove(sides)
+                                }
+                                else {
+                                    dice[sides] = newAmount
+                                }
+                            }
+                        },
+                        contentPadding = PaddingValues(5.dp),
+                        shape = RectangleShape
+                    ){
+                        Text("subtract")
+                    }
+                    TextButton(onClick={
+                        var newAmount = amount
+                        if (dice.containsKey(sides)) {
+                            newAmount += dice.getValue(sides)
+                        }
+                        dice[sides] = newAmount
+                        },
+                        contentPadding = PaddingValues(10.dp),
+                        shape = RectangleShape
+                    ){
+                        Text("add")
+                    }
+                }
+            }
+            //Spacer(modifier = Modifier.weight(1F))
             Column {
                 TextButton(onClick={
                     sides++
@@ -244,50 +357,38 @@ fun NewDiceSetView(navigationLambdas:NavigationLambdas) {
                 }
             }
         }
-        Button(onClick={
-            var newAmount = amount
-            if (dice.containsKey(sides)) {
-                newAmount += dice.getValue(sides)
-            }
-            dice[sides] = newAmount
-        }){
-            Text("add to collection")
-        }
-        Button(onClick={
-            if (dice.contains(sides)) {
-                var newAmount = dice.getValue(sides)
-                newAmount -= amount
-                if (newAmount<=0) {
-                    dice.remove(sides)
-                }
-                else {
-                    dice[sides] = newAmount
-                }
-            }
-        }){
-            Text("subtract from collection")
-        }
 
-        Button(onClick = {
+
+        TextButton(onClick = {
             imageLauncher.launch(
                 PickVisualMediaRequest(mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly)
-            )}
+            )},
+            modifier = Modifier.height(150.dp).padding(5.dp).fillMaxWidth(),
+            contentPadding = PaddingValues(0.dp),
+            shape = RectangleShape
         ) {
-            Text("select image")
+            if (image.value==null) {
+                Text("select image (optional)")
+            }
+            else {
+                image.value?.let {
+                    val painter = rememberAsyncImagePainter(it)
+                    Image(painter = painter,
+                        null,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
         }
-        image.value?.let {
-            val painter = rememberAsyncImagePainter(it)
-            Image(painter = painter,
-                null,
-                modifier = Modifier.size(150.dp, 150.dp)
-                    .padding(16.dp)
-            )
-        }
+
 
         var name by remember { mutableStateOf("") }
         TextField(name, {name=it}, label = {Text("name (required)")})
 
-        Row {
+        Row(
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             TextButton(onClick = {navigationLambdas.back()}) {
                 Text("cancel")
             }
@@ -296,9 +397,15 @@ fun NewDiceSetView(navigationLambdas:NavigationLambdas) {
                     val newCollection = DiceCollection()
                     // copy image to app files
                     image.value?.let {
-                        val copiedFile = File(appState.filesDir, name)
-                        fileFromContentUri(context, it, copiedFile)
-                        newCollection.imagePath = copiedFile.path
+                        var copiedFile:File? = null
+                        it.path?.let { it1 ->//use the picked gallery path -> less duplicate images
+                            {copiedFile = File(appState.filesDir, it1)}
+                        }
+                        if (copiedFile==null) {
+                            copiedFile = File(appState.filesDir, name)
+                        }
+                        fileFromContentUri(context, it, copiedFile!!)
+                        newCollection.imagePath = copiedFile!!.path
                     }
                     dice.forEach { (k, v) -> newCollection.dice[k] = v }
                     appState.installState!!.diceCollections[name] = newCollection
@@ -343,19 +450,23 @@ private fun copy(source: InputStream, target: OutputStream) {
 
 @Composable
 fun DiceCollectionCard(name:String, collection: DiceCollection) {
-    Column(modifier = Modifier.padding(10.dp).fillMaxWidth()) {
-        //if (!collection.imagePath.isNullOrBlank()) {
-        collection.imagePath?.let{
-            Image(
-                BitmapFactory.decodeFile(collection.imagePath).asImageBitmap(),
-                null,
-                modifier = Modifier.fillMaxWidth(),
-                contentScale = ContentScale.FillWidth
-            )
+    Button (
+        onClick = {},// TODO
+        modifier = Modifier.padding(5.dp),
+        contentPadding = PaddingValues(0.dp),
+        shape = RectangleShape
+    ) {
+        Column(modifier = Modifier.padding(10.dp).fillMaxWidth()) {
+            collection.imagePath?.let{
+                Image(
+                    BitmapFactory.decodeFile(collection.imagePath).asImageBitmap(),
+                    null,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.FillWidth
+                )
+            }
+            Text(name)
         }
-        Text(name)
-            //Text(collection.imagePath!!)
-        //}
     }
 }
 
@@ -367,7 +478,7 @@ fun PrimaryView(navigationLambdas:NavigationLambdas) {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(10.dp)
+            .padding(horizontal = 10.dp, vertical = 30.dp)
     ) {
         FlowRow(
             modifier = Modifier
@@ -375,8 +486,9 @@ fun PrimaryView(navigationLambdas:NavigationLambdas) {
                 .verticalScroll(rememberScrollState(0)),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            appState.installState?.diceCollections?.forEach {
-                DiceCollectionCard(it.key,it.value)
+            val collections = appState.installState?.diceCollections
+            collections?.keys?.sorted()?.forEach {
+                DiceCollectionCard(it,collections.getValue(it))
             }
         }
 
@@ -406,7 +518,6 @@ fun PrimaryView(navigationLambdas:NavigationLambdas) {
                 Text("statistics")
             }
         }
-        Spacer(modifier = Modifier.size(20.dp))
     }
 }
 
@@ -416,10 +527,12 @@ fun PrimaryView(navigationLambdas:NavigationLambdas) {
 fun ByteGenView(navigationLambdas:NavigationLambdas) {
     Column (verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth()) {
+            modifier = Modifier
+                .padding(horizontal = 10.dp, vertical = 30.dp)
+                .fillMaxWidth()
+    ) {
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(modifier = Modifier.size(20.dp))
             Button(onClick = {navigationLambdas.back()}
             ) {
                 Text("back")
@@ -442,30 +555,20 @@ fun ByteGenView(navigationLambdas:NavigationLambdas) {
                 .weight(1F)
         ) {
             items(appState.list) {item ->
-                Row {
-                    val color = Color(item.color)
-                    var binary = ""
-                    for (i in 0..7) {
-                        binary += ((item.value shr 7-i)%2).toString()
-                    }
-                    Text(
-                        item.value.toString(),
-                        color = color,
-                        fontSize = item.size.sp,
-                        modifier = Modifier.padding(horizontal = 5.dp)
-                    )
-                    Spacer(modifier = Modifier.weight(1F))
-                    Text(
-                        binary,
-                        color = color,
-                        fontSize = item.size.sp,
-                        modifier = Modifier.padding(horizontal = 5.dp)
-                    )
+                //val color = Color(item.color)
+                var binary = ""
+                for (i in 0..7) {
+                    binary += ((item.value shr 7-i)%2).toString()
                 }
+                Text(
+                    String.format("%2H", item.value)+" : "+binary,
+                    color = Color.hsl(item.color, 0.5F, 0.5F),
+                    fontSize = item.size.sp/2,
+                    //modifier = Modifier.padding(horizontal = 5.dp)
+                )
 
             }
         }
-        Spacer(modifier = Modifier.size(20.dp))
     }
 }
 
@@ -475,9 +578,10 @@ fun ByteGenView(navigationLambdas:NavigationLambdas) {
 fun StatisticsView(navigationLambdas:NavigationLambdas) {
     Column (verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth()) {
-
-        Spacer(modifier = Modifier.size(20.dp))
+        modifier = Modifier
+            .padding(horizontal = 10.dp, vertical = 30.dp)
+            .fillMaxWidth()
+    ) {
         Button(onClick = {navigationLambdas.back()}
         ) {
             Text("back")
