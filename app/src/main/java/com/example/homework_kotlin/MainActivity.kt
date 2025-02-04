@@ -12,11 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.collection.MutableIntList
-import androidx.collection.mutableFloatSetOf
-import androidx.collection.mutableIntListOf
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,17 +33,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -82,15 +75,12 @@ import java.io.File
 
 import androidx.navigation.NavController
 import androidx.navigation.toRoute
-import androidx.test.espresso.core.internal.deps.dagger.internal.SetFactory
-import androidx.test.espresso.util.filter
 import coil.compose.rememberAsyncImagePainter
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.ArrayList
-import java.util.Locale
 
 import java.util.Random
 import kotlin.math.absoluteValue
@@ -111,8 +101,6 @@ data class AppInstallState(
 
 data class AppSessionMutables(
     val bytes:SnapshotStateList<GeneratedByte> = mutableStateListOf(),
-    val rolls:HashMap<Int,MutableIntList> = HashMap(),
-    //val rollStats:DiceCollectionStats = DiceCollectionStats(),
 )
 data class AppSessionState(
     var seed: Long,
@@ -220,18 +208,6 @@ class MainActivity : ComponentActivity() {
             appState.rng.setSeed(appState.seed)
             val installFile = File(this.filesDir, INSTALL_STATE_FILENAME)
             appState.installState = loadInstallState(installFile)
-            /*
-            // fill with lists
-            val setOfKeys = mutableSetOf<Int>()
-            appState.installState!!.diceCollections.forEach {
-                setOfKeys.addAll(it.value.dice.keys)
-            }
-            setOfKeys.forEach {
-                appState.mutables.rolls[it] = mutableIntListOf()
-            }*/
-
-
-
         }
         setContent {
             Homework_kotlinTheme {
@@ -298,7 +274,6 @@ fun DieIcon(die:Die) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NewDiceCollectionView() {
     val context = LocalContext.current
@@ -440,7 +415,7 @@ fun DiceCollectionView(collection:DiceCollection) {
     var sides by remember { mutableIntStateOf(6) }
     val dice = remember {
         val list = mutableStateListOf<Die>()
-        collection.dice.forEach() {
+        collection.dice.forEach {
             list.add(it)
         }
         list
