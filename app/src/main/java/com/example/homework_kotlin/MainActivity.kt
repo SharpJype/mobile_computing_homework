@@ -35,6 +35,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -80,6 +83,7 @@ import java.io.File
 import androidx.navigation.NavController
 import androidx.navigation.toRoute
 import androidx.test.espresso.core.internal.deps.dagger.internal.SetFactory
+import androidx.test.espresso.util.filter
 import coil.compose.rememberAsyncImagePainter
 import java.io.FileOutputStream
 import java.io.IOException
@@ -134,8 +138,8 @@ class GeneratedByte (rng:Random) {
 
 @Serializable
 data class Die(
-    val sides:Int,
-    val roll:Int,
+    val sides:Short,
+    var roll:Short,
 )
 
 @Serializable
@@ -143,7 +147,6 @@ data class DiceCollection(
     val name:String,
     var imagePath:String? = null,
     val dice:ArrayList<Die> = ArrayList(),
-    //val dice:HashMap<Int,Int> = java.util.HashMap(),
 )
 
 
@@ -256,14 +259,14 @@ fun CustomEventListener(onEvent:(event: Lifecycle.Event) -> Unit) {
 }
 
 @Composable
-fun DiceIcon(amount:Int, sides:Int, value:Int?=null) {
+fun DieIcon(die:Die) {
     Box(
         modifier = Modifier
             .size(100.dp)
             .padding(5.dp)
             .drawWithCache {
                 val roundedPolygon = RoundedPolygon(
-                    numVertices = 3 + (sides - 1) / 3,
+                    numVertices = 3 + (die.sides - 1) / 3,
                     radius = size.minDimension / 2,
                     centerX = size.width / 2,
                     centerY = size.height / 2,
@@ -276,7 +279,7 @@ fun DiceIcon(amount:Int, sides:Int, value:Int?=null) {
                 onDrawBehind {
                     drawPath(
                         roundedPolygonPath, color = (
-                                Color.hsl((0F + sides * 10) % 360, .5F, .4F)
+                                Color.hsl((0F + die.sides * 10) % 360, .5F, .4F)
                                 )
                     )
                 }
@@ -287,8 +290,8 @@ fun DiceIcon(amount:Int, sides:Int, value:Int?=null) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                (value?.toString() ?: (amount.toString()+"d"+sides.toString())),
-                fontSize = (if (value==null) 25.sp else 30.sp),
+                die.roll.toString(),
+                fontSize = 30.sp,
                 color = Color.White,
             )
         }
@@ -367,15 +370,16 @@ fun NewDiceCollectionView() {
                         val newCollection = DiceCollection(name)
                         // copy image to app files
                         image.value?.let {
-                            var copiedFile:File? = null
+                            /*var copiedFile:File? = null
                             it.path?.let { it1 ->//use the picked gallery path -> less duplicate images
                                 {copiedFile = File(context.filesDir, it1)}
                             }
                             if (copiedFile==null) {
                                 copiedFile = File(context.filesDir, name)
-                            }
-                            fileFromContentUri(context, it, copiedFile!!)
-                            newCollection.imagePath = copiedFile!!.path
+                            }*/
+                            val copiedFile = File(context.filesDir, name)// always make a new copy of image
+                            fileFromContentUri(context, it, copiedFile)
+                            newCollection.imagePath = copiedFile.path
                         }
                         appState.installState!!.diceCollections[name] = newCollection
                         saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
@@ -395,14 +399,22 @@ fun NewDiceCollectionView() {
 
 
 @Composable
-fun DiceCollectionCard(collection: DiceCollection) {
+fun DiceCollectionCard(collection: DiceCollection, color:Color) {
+    val defaultColor = ButtonDefaults.buttonColors()
     Button (
         onClick = {
             appState.navigation!!.diceCollection(collection.name)
         },
         modifier = Modifier.padding(5.dp),
         contentPadding = PaddingValues(0.dp),
-        shape = RectangleShape
+        shape = RectangleShape,
+        //enabled = collection.dice.size>0,
+        colors = ButtonColors(
+            containerColor = color,
+            contentColor = defaultColor.contentColor,
+            disabledContentColor = defaultColor.disabledContentColor,
+            disabledContainerColor = defaultColor.disabledContainerColor
+            )
     ) {
         Column(modifier = Modifier
             .padding(10.dp)
@@ -421,20 +433,22 @@ fun DiceCollectionCard(collection: DiceCollection) {
 }
 
 
-
 @OptIn(ExperimentalLayoutApi::class)
 @SuppressLint("DefaultLocale")
 @Composable
 fun DiceCollectionView(collection:DiceCollection) {
-    val context = LocalContext.current
     var sides by remember { mutableIntStateOf(6) }
-    val dice = remember { mutableStateListOf<Die>() }
-    if (dice.size==0) {
+    val dice = remember {
+        val list = mutableStateListOf<Die>()
         collection.dice.forEach() {
-            dice.add(it)
+            list.add(it)
         }
+        list
     }
-    //val rolls = appState.mutables.rolls
+    fun rollDie(die:Die) {
+        die.roll = (1+appState.rng.nextInt().absoluteValue%die.sides).toShort()
+    }
+
     Column(verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -484,15 +498,15 @@ fun DiceCollectionView(collection:DiceCollection) {
                 .verticalScroll(rememberScrollState(0)),
             //horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
             dice.forEach {
                 TextButton(
                     onClick = {
-                        dice.remove(it)
-                        collection.dice.remove(it)
+                        if (dice.removeIf { die -> die === it }) {
+                            collection.dice.remove(it)
+                        }
                     }
                 ) {
-                    DiceIcon(0, it.sides, it.roll)
+                    DieIcon(it)
                 }
             }
         }
@@ -509,11 +523,13 @@ fun DiceCollectionView(collection:DiceCollection) {
                 Text("-", fontSize = 40.sp)
             }
             TextButton(onClick = {
-                dice.add(Die(sides, 1+appState.rng.nextInt().absoluteValue%sides))
-                collection.dice.add(dice.last())
+                val newDie = Die(sides.toShort(), 0)
+                rollDie(newDie)
+                dice.add(newDie)
+                collection.dice.add(newDie)
             }
             ){
-                DiceIcon(0, sides, sides)
+                DieIcon(Die(sides.toShort(), sides.toShort()))
                 //Text(sides.toString(), fontSize = 60.sp)
             }
             TextButton(onClick={
@@ -522,9 +538,29 @@ fun DiceCollectionView(collection:DiceCollection) {
                 Text("+", fontSize = 40.sp)
             }
         }
-        TextButton(onClick = {appState.navigation!!.back()}
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("back")
+            TextButton(onClick = {
+                dice.forEach {
+                    rollDie(it)
+                }
+                dice.reverse()
+                dice.reverse()
+            }) {
+                Text("reroll")
+            }
+            TextButton(onClick = {appState.navigation!!.back()}
+            ) {
+                Text("back")
+            }
+            TextButton(onClick = {
+                dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
+                collection.dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
+            }) {
+                Text("sort")
+            }
         }
     }
 }
@@ -533,31 +569,64 @@ fun DiceCollectionView(collection:DiceCollection) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PrimaryView() {
+    val count = remember { mutableIntStateOf(0) } // to detect updates to collections
+    val collections = appState.installState!!.diceCollections
     Column(verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 10.dp, vertical = 30.dp)
     ) {
+
         FlowRow(
             modifier = Modifier
                 .weight(1F)
                 .verticalScroll(rememberScrollState(0)),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            val collections = appState.installState?.diceCollections
-            collections?.keys?.sorted()?.forEach {
-                DiceCollectionCard(collections.getValue(it))
+            if ((count.intValue>0) or (collections.size>0)) {
+                collections.keys.sorted().forEach {
+                    val collection = collections.getValue(it)
+                    DiceCollectionCard(collection,
+                        Color.hsl(240F, 0.3F, 0.4F, alpha = (if (collection.dice.size>0) 1F else .2F))
+                    )
+                }
             }
+
         }
 
-        Button(
-            onClick = {appState.navigation!!.newDiceSet()},
+        Row(
             modifier = Modifier
-                .padding(vertical = 5.dp)
-                .fillMaxWidth()
+            .padding(vertical = 5.dp)
+            .fillMaxWidth(),
         ) {
-            Text("new collection")
+            Button(
+                onClick = {
+                    collections.keys.sorted().forEach { key ->
+                        val collection = collections.getValue(key)
+                        if (collection.dice.size==0) {
+                            collection.imagePath?.let { // presumes unique image
+                                File(it).delete()
+                            }
+                            collections.remove(key)
+                        }
+                    }
+                    count.intValue = collections.size
+                },
+                modifier = Modifier
+                    .weight(1F)
+                    .padding(end = 5.dp)
+            ) {
+                Text("clean empty")
+            }
+            Button(
+                onClick = {appState.navigation!!.newDiceSet()},
+                modifier = Modifier
+                    .weight(1F)
+                    .padding(start = 5.dp)
+            ) {
+                Text("new collection")
+            }
         }
         Row {
             Button(
@@ -632,20 +701,30 @@ fun ByteGenView() {
 }
 
 
+@SuppressLint("DefaultLocale")
 @Composable
 fun StatisticsView() {
     Column (verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .padding(horizontal = 10.dp, vertical = 30.dp)
-            .fillMaxWidth()
+            .fillMaxSize()
     ) {
+        var string = "Launches: "+appState.installState?.timesLaunched.toString()
+        string += "\nSeed: "+appState.seed.toString()
+
+        val collections = appState.installState?.diceCollections!!
+        string += String.format("\nCollections: %d", collections.size)
+        var diceCount = 0
+        collections.forEach {
+            diceCount += it.value.dice.size
+        }
+        string += String.format("\nDice Total: %d", diceCount)
+        Text(string)
         TextButton(onClick = {appState.navigation!!.back()}
         ) {
             Text("back")
         }
-        Text("Times launched: "+appState.installState?.timesLaunched.toString())
-        Text("ByteGen seed: "+appState.seed.toString())
     }
 }
 
