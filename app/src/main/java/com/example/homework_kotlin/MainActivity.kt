@@ -33,9 +33,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -55,7 +58,10 @@ import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.CornerRounding
@@ -67,7 +73,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.homework_kotlin.ui.theme.Homework_kotlinTheme
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -76,6 +81,7 @@ import java.io.File
 import androidx.navigation.NavController
 import androidx.navigation.toRoute
 import coil.compose.rememberAsyncImagePainter
+import com.example.homework_kotlin.ui.theme.DefaultTheme
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -109,10 +115,6 @@ data class AppSessionState(
     var installState: AppInstallState? = null,
     var navigation: Navigation? = null,
 )
-
-
-
-
 
 
 
@@ -193,7 +195,9 @@ private fun copy(source: InputStream, target: OutputStream) {
 
 
 
-
+val fontSize0 = 15.sp
+val fontSize1 = 20.sp
+val fontSize2 = 30.sp
 val appState = AppSessionState(
     0,
     Random(),
@@ -210,8 +214,10 @@ class MainActivity : ComponentActivity() {
             appState.installState = loadInstallState(installFile)
         }
         setContent {
-            Homework_kotlinTheme {
-                NavigableViews()
+            DefaultTheme {
+                Surface {
+                    NavigableViews()
+                }
             }
         }
     }
@@ -255,7 +261,7 @@ fun DieIcon(die:Die) {
                 onDrawBehind {
                     drawPath(
                         roundedPolygonPath, color = (
-                                Color.hsl((0F + die.sides * 10) % 360, .5F, .4F)
+                                Color.hsl((50F + die.sides * 10) % 360, .5F, .5F)
                                 )
                     )
                 }
@@ -267,8 +273,8 @@ fun DieIcon(die:Die) {
         ) {
             Text(
                 die.roll.toString(),
-                fontSize = 30.sp,
-                color = Color.White,
+                fontSize = fontSize2,
+                color = MaterialTheme.colorScheme.onPrimary,
             )
         }
     }
@@ -301,10 +307,13 @@ fun NewDiceCollectionView() {
                 .padding(5.dp)
                 .fillMaxWidth(),
             contentPadding = PaddingValues(0.dp),
-            shape = RectangleShape
+            shape = RectangleShape,
         ) {
             if (image.value==null) {
-                Text("select image (optional)")
+                Text(
+                    "select image (optional)",
+                    fontSize = fontSize1,
+                    )
             }
             else {
                 image.value?.let {
@@ -322,11 +331,16 @@ fun NewDiceCollectionView() {
 
         Column {
             TextField(name, {name=it},
-                label = {Text("name (required)")},
+                label = {
+                    Text(
+                        "name (required)",
+                        fontSize = fontSize1,
+                        )
+                },
                 shape = RectangleShape,
                 modifier = Modifier
                     .padding(vertical = 10.dp)
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
             )
 
             Row(
@@ -336,9 +350,12 @@ fun NewDiceCollectionView() {
                 TextButton(
                     onClick = {
                         appState.navigation!!.back()
-                    }
+                    },
                 ) {
-                    Text("cancel")
+                    Text(
+                        "cancel",
+                        fontSize = fontSize1,
+                        )
                 }
                 Button(onClick = {
                     if (name.isNotEmpty()) {
@@ -359,9 +376,12 @@ fun NewDiceCollectionView() {
                         appState.installState!!.diceCollections[name] = newCollection
                         saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
                         appState.navigation!!.back()
-                    }
-                }) {
-                    Text("confirm")
+                    }},
+                ) {
+                    Text(
+                        "confirm",
+                        fontSize = fontSize1,
+                        )
                 }
             }
         }
@@ -374,8 +394,7 @@ fun NewDiceCollectionView() {
 
 
 @Composable
-fun DiceCollectionCard(collection: DiceCollection, color:Color) {
-    val defaultColor = ButtonDefaults.buttonColors()
+fun DiceCollectionCard(collection: DiceCollection) {
     Button (
         onClick = {
             appState.navigation!!.diceCollection(collection.name)
@@ -385,24 +404,29 @@ fun DiceCollectionCard(collection: DiceCollection, color:Color) {
         shape = RectangleShape,
         //enabled = collection.dice.size>0,
         colors = ButtonColors(
-            containerColor = color,
-            contentColor = defaultColor.contentColor,
-            disabledContentColor = defaultColor.disabledContentColor,
-            disabledContainerColor = defaultColor.disabledContainerColor
-            )
+            (if (collection.dice.size==0) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary),
+            MaterialTheme.colorScheme.onPrimary,
+            MaterialTheme.colorScheme.secondary,
+            MaterialTheme.colorScheme.onPrimary,
+        ),
     ) {
         Column(modifier = Modifier
             .padding(10.dp)
             .fillMaxWidth()) {
             collection.imagePath?.let{
-                Image(
-                    BitmapFactory.decodeFile(collection.imagePath).asImageBitmap(),
-                    null,
-                    modifier = Modifier.padding(bottom = 5.dp).fillMaxWidth(),
-                    contentScale = ContentScale.FillWidth
-                )
+                if (File(it).exists()) { // not null and exists
+                    Image(
+                        BitmapFactory.decodeFile(it).asImageBitmap(),
+                        null,
+                        modifier = Modifier.padding(bottom = 5.dp).fillMaxWidth(),
+                        contentScale = ContentScale.FillWidth
+                    )
+                }
+
             }
-            Text(collection.name, fontSize = 20.sp)
+            Text(collection.name,
+                fontSize = fontSize1,
+                )
         }
     }
 }
@@ -479,7 +503,7 @@ fun DiceCollectionView(collection:DiceCollection) {
                         if (dice.removeIf { die -> die === it }) {
                             collection.dice.remove(it)
                         }
-                    }
+                    },
                 ) {
                     DieIcon(it)
                 }
@@ -490,19 +514,24 @@ fun DiceCollectionView(collection:DiceCollection) {
             verticalAlignment=Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 50.dp)
         ) {
-            TextButton(onClick={
-                if (sides>2) {
-                    sides--
-                }
-            }){
-                Text("-", fontSize = 40.sp)
+            TextButton(
+                onClick = {
+                    if (sides>2) {
+                        sides--
+                    }
+                },
+            ) {
+                Text("-",
+                    fontSize = fontSize2,
+                    )
             }
-            TextButton(onClick = {
-                val newDie = Die(sides.toShort(), 0)
-                rollDie(newDie)
-                dice.add(newDie)
-                collection.dice.add(newDie)
-            }
+            TextButton(
+                onClick = {
+                    val newDie = Die(sides.toShort(), 0)
+                    rollDie(newDie)
+                    dice.add(newDie)
+                    collection.dice.add(newDie)
+                },
             ){
                 DieIcon(Die(sides.toShort(), sides.toShort()))
                 //Text(sides.toString(), fontSize = 60.sp)
@@ -510,31 +539,43 @@ fun DiceCollectionView(collection:DiceCollection) {
             TextButton(onClick={
                 sides++
             }){
-                Text("+", fontSize = 40.sp)
+                Text("+",
+                    fontSize = fontSize2,
+                    )
             }
         }
         Row(
             horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()
         ) {
-            TextButton(onClick = {
-                dice.forEach {
-                    rollDie(it)
-                }
-                dice.reverse()
-                dice.reverse()
-            }) {
-                Text("reroll")
-            }
-            TextButton(onClick = {appState.navigation!!.back()}
+            TextButton(
+                onClick = {
+                    dice.forEach {
+                        rollDie(it)
+                    }
+                    dice.reverse()
+                    dice.reverse()},
             ) {
-                Text("back")
+                Text("reroll",
+                    fontSize = fontSize1
+                    )
             }
-            TextButton(onClick = {
+            TextButton(
+                onClick = {appState.navigation!!.back()},
+            ) {
+                Text("back",
+                    fontSize = fontSize1
+                    )
+            }
+            TextButton(
+                onClick = {
                 dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
                 collection.dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
-            }) {
-                Text("sort")
+                },
+            ) {
+                Text("sort",
+                    fontSize = fontSize1
+                    )
             }
         }
     }
@@ -544,6 +585,7 @@ fun DiceCollectionView(collection:DiceCollection) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PrimaryView() {
+    val context = LocalContext.current
     val count = remember { mutableIntStateOf(0) } // to detect updates to collections
     val collections = appState.installState!!.diceCollections
     Column(verticalArrangement = Arrangement.Top,
@@ -562,9 +604,7 @@ fun PrimaryView() {
             if ((count.intValue>0) or (collections.size>0)) {
                 collections.keys.sorted().forEach {
                     val collection = collections.getValue(it)
-                    DiceCollectionCard(collection,
-                        Color.hsl(240F, 0.3F, 0.4F, alpha = (if (collection.dice.size>0) 1F else .2F))
-                    )
+                    DiceCollectionCard(collection)
                 }
             }
 
@@ -586,21 +626,30 @@ fun PrimaryView() {
                             collections.remove(key)
                         }
                     }
+                    // save instantly if something was cleared
+                    if (count.intValue!=collections.size) {
+                        saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
+                    }
                     count.intValue = collections.size
+
                 },
                 modifier = Modifier
                     .weight(1F)
-                    .padding(end = 5.dp)
+                    .padding(end = 5.dp),
             ) {
-                Text("clean empty")
+                Text("clean empty",
+                    fontSize = fontSize0,
+                    )
             }
             Button(
                 onClick = {appState.navigation!!.newDiceSet()},
                 modifier = Modifier
                     .weight(1F)
-                    .padding(start = 5.dp)
+                    .padding(start = 5.dp),
             ) {
-                Text("new collection")
+                Text("new collection",
+                    fontSize = fontSize0,
+                    )
             }
         }
         Row {
@@ -608,17 +657,21 @@ fun PrimaryView() {
                 onClick = {appState.navigation!!.byteGen()},
                 modifier = Modifier
                     .weight(1F)
-                    .padding(end = 5.dp)
+                    .padding(end = 5.dp),
             ) {
-                Text("byte generator")
+                Text("byte generator",
+                    fontSize = fontSize0,
+                    )
             }
             Button(
                 onClick = {appState.navigation!!.statistics()},
                 modifier = Modifier
                     .weight(1F)
-                    .padding(start = 5.dp)
+                    .padding(start = 5.dp),
             ) {
-                Text("statistics")
+                Text("statistics",
+                    fontSize = fontSize0,
+                    )
             }
         }
     }
@@ -638,18 +691,23 @@ fun ByteGenView() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             TextButton(onClick = {appState.navigation!!.back()}
             ) {
-                Text("back")
+                Text("back",
+                    fontSize = fontSize1,
+                    )
             }
             Image(painter = painterResource(
                 id = R.drawable.campfire_w_sword),
                 "image",
                 modifier = Modifier
                     .size(200.dp)
+                    .padding(vertical = 10.dp)
             )
             Button(onClick = {
                 appState.mutables.bytes.add(GeneratedByte(appState.rng)) },
             ) {
-                Text("generate bytes")
+                Text("generate bytes",
+                    fontSize = fontSize1,
+                    )
             }
         }
         LazyColumn (
@@ -658,7 +716,6 @@ fun ByteGenView() {
                 .weight(1F)
         ) {
             items(appState.mutables.bytes) {item ->
-                //val color = Color(item.color)
                 var binary = ""
                 for (i in 0..7) {
                     binary += ((item.value shr 7-i)%2).toString()
@@ -667,7 +724,6 @@ fun ByteGenView() {
                     String.format("%2H", item.value)+" : "+binary,
                     color = Color.hsl(item.color, 0.5F, 0.5F),
                     fontSize = item.size.sp/2,
-                    //modifier = Modifier.padding(horizontal = 5.dp)
                 )
 
             }
@@ -679,27 +735,33 @@ fun ByteGenView() {
 @SuppressLint("DefaultLocale")
 @Composable
 fun StatisticsView() {
-    Column (verticalArrangement = Arrangement.SpaceBetween,
+    Column (
+        //verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .padding(horizontal = 10.dp, vertical = 30.dp)
             .fillMaxSize()
     ) {
+        TextButton(onClick = {appState.navigation!!.back()},
+        ) {
+            Text("back",
+                fontSize = fontSize1,
+            )
+        }
+
         var string = "Launches: "+appState.installState?.timesLaunched.toString()
         string += "\nSeed: "+appState.seed.toString()
-
         val collections = appState.installState?.diceCollections!!
         string += String.format("\nCollections: %d", collections.size)
         var diceCount = 0
         collections.forEach {
             diceCount += it.value.dice.size
         }
-        string += String.format("\nDice Total: %d", diceCount)
-        Text(string)
-        TextButton(onClick = {appState.navigation!!.back()}
-        ) {
-            Text("back")
-        }
+        string += String.format("\nCollection Dice: %d", diceCount)
+        Text(string,
+            fontSize = fontSize1,
+            lineHeight = fontSize1*1.5,
+            )
     }
 }
 
