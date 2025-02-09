@@ -2,10 +2,15 @@ package com.example.homework_kotlin
 
 
 import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -64,6 +69,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.getSystemService
 import androidx.graphics.shapes.CornerRounding
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
@@ -105,15 +113,20 @@ data class AppInstallState(
     val diceCollections:HashMap<String, DiceCollection> = HashMap()
 )
 
-data class AppSessionMutables(
-    val bytes:SnapshotStateList<GeneratedByte> = mutableStateListOf(),
-)
 data class AppSessionState(
     var seed: Long,
     val rng: Random,
-    val mutables: AppSessionMutables = AppSessionMutables(),
+    val bytes:SnapshotStateList<GeneratedByte> = mutableStateListOf(),
     var installState: AppInstallState? = null,
     var navigation: Navigation? = null,
+)
+
+val fontSize0 = 15.sp
+val fontSize1 = 20.sp
+val fontSize2 = 30.sp
+val appState = AppSessionState(
+    0,
+    Random(),
 )
 
 
@@ -192,16 +205,6 @@ private fun copy(source: InputStream, target: OutputStream) {
     }
 }
 ///////
-
-
-
-val fontSize0 = 15.sp
-val fontSize1 = 20.sp
-val fontSize2 = 30.sp
-val appState = AppSessionState(
-    0,
-    Random(),
-)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -296,7 +299,9 @@ fun NewDiceCollectionView() {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceEvenly,
-        modifier = Modifier.padding(horizontal = 10.dp, vertical = 30.dp).fillMaxHeight()
+        modifier = Modifier
+            .padding(horizontal = 10.dp, vertical = 30.dp)
+            .fillMaxHeight()
     ) {
         TextButton(onClick = {
             imageLauncher.launch(
@@ -418,7 +423,9 @@ fun DiceCollectionCard(collection: DiceCollection) {
                     Image(
                         BitmapFactory.decodeFile(it).asImageBitmap(),
                         null,
-                        modifier = Modifier.padding(bottom = 5.dp).fillMaxWidth(),
+                        modifier = Modifier
+                            .padding(bottom = 5.dp)
+                            .fillMaxWidth(),
                         contentScale = ContentScale.FillWidth
                     )
                 }
@@ -612,8 +619,8 @@ fun PrimaryView() {
 
         Row(
             modifier = Modifier
-            .padding(vertical = 5.dp)
-            .fillMaxWidth(),
+                .padding(vertical = 5.dp)
+                .fillMaxWidth(),
         ) {
             Button(
                 onClick = {
@@ -703,7 +710,7 @@ fun ByteGenView() {
                     .padding(vertical = 10.dp)
             )
             Button(onClick = {
-                appState.mutables.bytes.add(GeneratedByte(appState.rng)) },
+                appState.bytes.add(GeneratedByte(appState.rng)) },
             ) {
                 Text("generate bytes",
                     fontSize = fontSize1,
@@ -715,7 +722,7 @@ fun ByteGenView() {
             modifier = Modifier
                 .weight(1F)
         ) {
-            items(appState.mutables.bytes) {item ->
+            items(appState.bytes) {item ->
                 var binary = ""
                 for (i in 0..7) {
                     binary += ((item.value shr 7-i)%2).toString()
@@ -735,6 +742,9 @@ fun ByteGenView() {
 @SuppressLint("DefaultLocale")
 @Composable
 fun StatisticsView() {
+    val example = checkPermission("android.permission.POST_NOTIFICATIONS") {
+        // if access is granted; do something
+    }
     Column (
         //verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -742,7 +752,10 @@ fun StatisticsView() {
             .padding(horizontal = 10.dp, vertical = 30.dp)
             .fillMaxSize()
     ) {
-        TextButton(onClick = {appState.navigation!!.back()},
+        TextButton(onClick = {
+            example()
+            appState.navigation!!.back()
+            },
         ) {
             Text("back",
                 fontSize = fontSize1,
@@ -814,3 +827,57 @@ fun NavigableViews() {
     }
 }
 
+
+
+
+/// permissions
+@Composable
+fun checkPermission(permission: String, onPermissionGranted:()->Unit):()->Unit {
+    val context = LocalContext.current
+    // launcher to request permission
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) onPermissionGranted()
+    }
+    return {
+        when (PackageManager.PERMISSION_GRANTED) {
+            ContextCompat.checkSelfPermission(context, permission) -> onPermissionGranted()
+            else -> launcher.launch(permission)
+        }
+    }
+}
+
+
+
+/// notifications
+/*
+const val CHANNEL_ID = "diceAppChannelId"
+
+fun notificationBuilder(context:Context, title:String, content:String):NotificationCompat.Builder {
+    return NotificationCompat.Builder(context, CHANNEL_ID)
+        //.setSmallIcon(R.drawable.notification_icon)
+        .setContentTitle(title)
+        .setContentText(content)
+        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        //.setContentIntent(pendingIntent)
+        .setAutoCancel(true)// tap to remove notification
+}
+
+private fun createNotificationChannel(name:String, desc:String) {
+    // As soon as app starts
+
+    // Create the NotificationChannel, but only on API 26+ because
+    // the NotificationChannel class is not in the Support Library.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val importance = NotificationManager.IMPORTANCE_DEFAULT
+        val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+            description = desc
+        }
+        // Register the channel with the system.
+        val notificationManager: NotificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
+    }
+}
+*/

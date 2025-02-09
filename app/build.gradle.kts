@@ -64,19 +64,18 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
     // nav support
-    val nav_version = "2.8.5"
     // Jetpack Compose integration
-    implementation("androidx.navigation:navigation-compose:$nav_version")
+    implementation(libs.androidx.navigation.compose)
     // Views/Fragments integration
-    implementation("androidx.navigation:navigation-fragment:$nav_version")
-    implementation("androidx.navigation:navigation-ui:$nav_version")
-    // Feature module support for Fragments
-    implementation("androidx.navigation:navigation-dynamic-features-fragment:$nav_version")
+    implementation(libs.androidx.navigation.fragment)
+    implementation(libs.androidx.navigation.ui)
+    implementation(libs.androidx.navigation.dynamic.features.fragment)
     // Testing Navigation
-    androidTestImplementation("androidx.navigation:navigation-testing:$nav_version")
+    //androidTestImplementation("androidx.navigation:navigation-testing:$nav_version")
     // JSON serialization library, works with the Kotlin serialization plugin
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    implementation("io.coil-kt:coil-compose:2.3.0")
-    implementation("androidx.graphics:graphics-shapes:1.0.1")
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.coil.compose)
+    implementation(libs.androidx.graphics.shapes)
+    implementation("com.google.accompanist:accompanist-permissions:0.37.0")
 
 }
