@@ -2,15 +2,17 @@ package com.example.homework_kotlin
 
 
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -37,13 +39,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -61,17 +61,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.ContextCompat.getSystemService
 import androidx.graphics.shapes.CornerRounding
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
@@ -104,8 +102,12 @@ fun randomFullColor(rng:Random):Int {
     return rng.nextInt().absoluteValue or FULL_ALPHA
 }*/
 
-
+// CONSTANTS
 const val INSTALL_STATE_FILENAME = "installState"
+const val CHANNEL_ID = "diceAppChannelId"
+
+
+// BASE CLASSES
 @Serializable
 data class AppInstallState(
     // keep statistics since app was first launched
@@ -121,13 +123,6 @@ data class AppSessionState(
     var navigation: Navigation? = null,
 )
 
-val fontSize0 = 15.sp
-val fontSize1 = 20.sp
-val fontSize2 = 30.sp
-val appState = AppSessionState(
-    0,
-    Random(),
-)
 
 
 
@@ -157,7 +152,7 @@ data class DiceCollection(
 
 
 
-
+// FILE OPERATION FUNCTIONS
 fun saveInstallState(file:File, installState:AppInstallState) {
     val writeStream = file.outputStream()
     val bytes = Json.encodeToString(installState).encodeToByteArray()
@@ -178,9 +173,6 @@ fun loadInstallState(file:File):AppInstallState {
     saveInstallState(file, installState)
     return installState
 }
-
-
-
 
 ////// original from -> https://medium.com/@bdulahad/file-from-uri-content-scheme-ac51c10c8331
 private fun fileFromContentUri(context: Context, contentUri: Uri, file:File) {
@@ -206,10 +198,22 @@ private fun copy(source: InputStream, target: OutputStream) {
 }
 ///////
 
+
+
+
+val fontSize0 = 15.sp
+val fontSize1 = 20.sp
+val fontSize2 = 30.sp
+val appState = AppSessionState(
+    0,
+    Random(),
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        createNotificationChannel("DiceApp", "description")
         if (appState.installState==null) {
             appState.seed = appState.rng.nextLong().absoluteValue%(1 shl 16)
             appState.rng.setSeed(appState.seed)
@@ -224,6 +228,24 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /// NOTIFICATIONS
+    private fun createNotificationChannel(name:String, desc:String) {
+        // As soon as app starts
+        // Create the NotificationChannel, but only on API 26+ because
+        // the NotificationChannel class is not in the Support Library.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+                description = desc
+            }
+            // Register the channel with the system.
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
 }
 
 @Composable
@@ -295,6 +317,7 @@ fun NewDiceCollectionView() {
             }
         }
     )
+    val saveNotification = setupSaveNotification()
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -303,10 +326,12 @@ fun NewDiceCollectionView() {
             .padding(horizontal = 10.dp, vertical = 30.dp)
             .fillMaxHeight()
     ) {
-        TextButton(onClick = {
-            imageLauncher.launch(
-                PickVisualMediaRequest(mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly)
-            )},
+        TextButton(
+            onClick = {
+                imageLauncher.launch(
+                    PickVisualMediaRequest(mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
             modifier = Modifier
                 .height(200.dp)//if (image.value == null) 50.dp else 150.dp)
                 .padding(5.dp)
@@ -335,12 +360,13 @@ fun NewDiceCollectionView() {
         var name by remember { mutableStateOf("") }
 
         Column {
-            TextField(name, {name=it},
+            TextField(
+                name, { name = it },
                 label = {
                     Text(
                         "name (required)",
                         fontSize = fontSize1,
-                        )
+                    )
                 },
                 shape = RectangleShape,
                 modifier = Modifier
@@ -362,26 +388,33 @@ fun NewDiceCollectionView() {
                         fontSize = fontSize1,
                         )
                 }
-                Button(onClick = {
-                    if (name.isNotEmpty()) {
-                        val newCollection = DiceCollection(name)
-                        // copy image to app files
-                        image.value?.let {
-                            /*var copiedFile:File? = null
+                Button(
+                    onClick = {
+                        if (name.isNotEmpty()) {
+                            val newCollection = DiceCollection(name)
+                            // copy image to app files
+                            image.value?.let {
+                                /*var copiedFile:File? = null
                             it.path?.let { it1 ->//use the picked gallery path -> less duplicate images
                                 {copiedFile = File(context.filesDir, it1)}
                             }
                             if (copiedFile==null) {
                                 copiedFile = File(context.filesDir, name)
                             }*/
-                            val copiedFile = File(context.filesDir, name)// always make a new copy of image
-                            fileFromContentUri(context, it, copiedFile)
-                            newCollection.imagePath = copiedFile.path
+                                val copiedFile =
+                                    File(context.filesDir, name)// always make a new copy of image
+                                fileFromContentUri(context, it, copiedFile)
+                                newCollection.imagePath = copiedFile.path
+                            }
+                            appState.installState!!.diceCollections[name] = newCollection
+                            saveInstallState(
+                                File(context.filesDir, INSTALL_STATE_FILENAME),
+                                appState.installState!!
+                            )
+                            saveNotification()
+                            appState.navigation!!.back()
                         }
-                        appState.installState!!.diceCollections[name] = newCollection
-                        saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
-                        appState.navigation!!.back()
-                    }},
+                    },
                 ) {
                     Text(
                         "confirm",
@@ -431,9 +464,10 @@ fun DiceCollectionCard(collection: DiceCollection) {
                 }
 
             }
-            Text(collection.name,
+            Text(
+                collection.name,
                 fontSize = fontSize1,
-                )
+            )
         }
     }
 }
@@ -443,6 +477,7 @@ fun DiceCollectionCard(collection: DiceCollection) {
 @SuppressLint("DefaultLocale")
 @Composable
 fun DiceCollectionView(collection:DiceCollection) {
+    val context = LocalContext.current
     var sides by remember { mutableIntStateOf(6) }
     val dice = remember {
         val list = mutableStateListOf<Die>()
@@ -455,6 +490,9 @@ fun DiceCollectionView(collection:DiceCollection) {
         die.roll = (1+appState.rng.nextInt().absoluteValue%die.sides).toShort()
     }
 
+    val anyChanges = remember { mutableStateOf(false) }
+    val saveNotification = setupSaveNotification()
+
     Column(verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -462,53 +500,17 @@ fun DiceCollectionView(collection:DiceCollection) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState(0))
     ) {
-        /*
-        collection.dice.keys.sorted().forEach {
-            val amount = collection.dice.getValue(it)
-            Row(
-                modifier = Modifier
-                    .horizontalScroll(rememberScrollState(0))
-            ) {
-                val sum = remember { mutableIntStateOf(0) }
-                val mean = remember { mutableFloatStateOf(0F) }
-                val median = remember { mutableIntStateOf(0) }
-                TextButton(onClick = {
-                    if (!rolls.contains(it)) rolls[it] = mutableIntListOf()
-                    val list = rolls[it]!!
-                    sum.intValue = 0
-                    list.clear()
-                    for (i in 1..amount) {
-                        list.add(1+appState.rng.nextInt().absoluteValue%it)
-                        sum.intValue += list.last()
-                    }
-                    list.sort()
-                    mean.floatValue = sum.intValue.toFloat()/list.size
-                    median.intValue = list[(if (list.size>1) list.size/2 else 0)]
-                }
-                ) {
-                    DiceIcon(amount, it)
-                }
-                if (sum.intValue>0) {
-                    Column() {
-                        Text(sum.intValue.toString())
-                        Text(String.format("%.3f", mean.floatValue))
-                        Text(median.intValue.toString())
-                    }
-                }
-
-            }
-        }*/
         FlowRow(
             modifier = Modifier
                 .weight(1F)
                 .verticalScroll(rememberScrollState(0)),
-            //horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             dice.forEach {
                 TextButton(
                     onClick = {
                         if (dice.removeIf { die -> die === it }) {
                             collection.dice.remove(it)
+                            anyChanges.value = true
                         }
                     },
                 ) {
@@ -528,9 +530,10 @@ fun DiceCollectionView(collection:DiceCollection) {
                     }
                 },
             ) {
-                Text("-",
+                Text(
+                    "-",
                     fontSize = fontSize2,
-                    )
+                )
             }
             TextButton(
                 onClick = {
@@ -538,6 +541,7 @@ fun DiceCollectionView(collection:DiceCollection) {
                     rollDie(newDie)
                     dice.add(newDie)
                     collection.dice.add(newDie)
+                    anyChanges.value = true
                 },
             ){
                 DieIcon(Die(sides.toShort(), sides.toShort()))
@@ -546,9 +550,10 @@ fun DiceCollectionView(collection:DiceCollection) {
             TextButton(onClick={
                 sides++
             }){
-                Text("+",
+                Text(
+                    "+",
                     fontSize = fontSize2,
-                    )
+                )
             }
         }
         Row(
@@ -560,24 +565,34 @@ fun DiceCollectionView(collection:DiceCollection) {
                     dice.forEach {
                         rollDie(it)
                     }
-                    dice.reverse()
-                    dice.reverse()},
+                    val updateDie = Die(1, 1)// force visual update to dice
+                    dice.add(updateDie)
+                    dice.remove(updateDie)
+                    anyChanges.value = true
+                          },
             ) {
                 Text("reroll",
                     fontSize = fontSize1
                     )
             }
             TextButton(
-                onClick = {appState.navigation!!.back()},
+                onClick = {
+                    if (anyChanges.value) {
+                        saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
+                        saveNotification()
+                    }
+                    appState.navigation!!.back()
+                },
             ) {
-                Text("back",
+                Text((if (anyChanges.value) "save & close" else "close"),
                     fontSize = fontSize1
                     )
             }
             TextButton(
                 onClick = {
-                dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
-                collection.dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
+                    dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
+                    collection.dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
+                    anyChanges.value = true
                 },
             ) {
                 Text("sort",
@@ -595,6 +610,8 @@ fun PrimaryView() {
     val context = LocalContext.current
     val count = remember { mutableIntStateOf(0) } // to detect updates to collections
     val collections = appState.installState!!.diceCollections
+
+    val saveNotification = setupSaveNotification()
     Column(verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -636,6 +653,7 @@ fun PrimaryView() {
                     // save instantly if something was cleared
                     if (count.intValue!=collections.size) {
                         saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
+                        saveNotification()
                     }
                     count.intValue = collections.size
 
@@ -644,9 +662,10 @@ fun PrimaryView() {
                     .weight(1F)
                     .padding(end = 5.dp),
             ) {
-                Text("clean empty",
+                Text(
+                    "clean empty",
                     fontSize = fontSize0,
-                    )
+                )
             }
             Button(
                 onClick = {appState.navigation!!.newDiceSet()},
@@ -654,9 +673,10 @@ fun PrimaryView() {
                     .weight(1F)
                     .padding(start = 5.dp),
             ) {
-                Text("new collection",
+                Text(
+                    "new collection",
                     fontSize = fontSize0,
-                    )
+                )
             }
         }
         Row {
@@ -666,9 +686,10 @@ fun PrimaryView() {
                     .weight(1F)
                     .padding(end = 5.dp),
             ) {
-                Text("byte generator",
+                Text(
+                    "byte generator",
                     fontSize = fontSize0,
-                    )
+                )
             }
             Button(
                 onClick = {appState.navigation!!.statistics()},
@@ -676,9 +697,10 @@ fun PrimaryView() {
                     .weight(1F)
                     .padding(start = 5.dp),
             ) {
-                Text("statistics",
+                Text(
+                    "statistics",
                     fontSize = fontSize0,
-                    )
+                )
             }
         }
     }
@@ -698,9 +720,10 @@ fun ByteGenView() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             TextButton(onClick = {appState.navigation!!.back()}
             ) {
-                Text("back",
+                Text(
+                    "back",
                     fontSize = fontSize1,
-                    )
+                )
             }
             Image(painter = painterResource(
                 id = R.drawable.campfire_w_sword),
@@ -709,12 +732,15 @@ fun ByteGenView() {
                     .size(200.dp)
                     .padding(vertical = 10.dp)
             )
-            Button(onClick = {
-                appState.bytes.add(GeneratedByte(appState.rng)) },
+            Button(
+                onClick = {
+                    appState.bytes.add(GeneratedByte(appState.rng))
+                },
             ) {
-                Text("generate bytes",
+                Text(
+                    "generate bytes",
                     fontSize = fontSize1,
-                    )
+                )
             }
         }
         LazyColumn (
@@ -742,9 +768,6 @@ fun ByteGenView() {
 @SuppressLint("DefaultLocale")
 @Composable
 fun StatisticsView() {
-    val example = checkPermission("android.permission.POST_NOTIFICATIONS") {
-        // if access is granted; do something
-    }
     Column (
         //verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -752,12 +775,13 @@ fun StatisticsView() {
             .padding(horizontal = 10.dp, vertical = 30.dp)
             .fillMaxSize()
     ) {
-        TextButton(onClick = {
-            example()
-            appState.navigation!!.back()
+        TextButton(
+            onClick = {
+                appState.navigation!!.back()
             },
         ) {
-            Text("back",
+            Text(
+                "back",
                 fontSize = fontSize1,
             )
         }
@@ -771,10 +795,11 @@ fun StatisticsView() {
             diceCount += it.value.dice.size
         }
         string += String.format("\nCollection Dice: %d", diceCount)
-        Text(string,
+        Text(
+            string,
             fontSize = fontSize1,
-            lineHeight = fontSize1*1.5,
-            )
+            lineHeight = fontSize1 * 1.5,
+        )
     }
 }
 
@@ -797,23 +822,14 @@ data class DiceCollectionRoute(val name: String)
 
 @Composable
 fun NavigableViews() {
-    val context = LocalContext.current
     val navController = rememberNavController()
     appState.navigation = Navigation(navController)
-
-    CustomEventListener {
+    /*CustomEventListener {
         if (it==Lifecycle.Event.ON_PAUSE) {
             saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
+            saveNotification()
         }
-        /*if (it == Lifecycle.Event.ON_START) {
-            //appState.installState.timesLaunched++
-            saveInstallState(installFile, appState.installState)
-        }*/
-        /*if (appState.saveInstallState) { // check every event
-            saveInstallState(installFile, appState.installState)
-            appState.saveInstallState = false
-        }*/
-    }
+    }*/
     NavHost(navController, startDestination = "primary") {
         composable<DiceCollectionRoute> { backStackEntry ->
             val route = backStackEntry.toRoute<DiceCollectionRoute>()
@@ -830,7 +846,7 @@ fun NavigableViews() {
 
 
 
-/// permissions
+/// PERMISSIONS
 @Composable
 fun checkPermission(permission: String, onPermissionGranted:()->Unit):()->Unit {
     val context = LocalContext.current
@@ -849,35 +865,45 @@ fun checkPermission(permission: String, onPermissionGranted:()->Unit):()->Unit {
 }
 
 
+// NOTIFICATIONS
+@SuppressLint("DefaultLocale")
+@Composable
+fun setupNotification(id:Int, title:String, content:String):()->Unit {
+    val context = LocalContext.current
 
-/// notifications
-/*
-const val CHANNEL_ID = "diceAppChannelId"
+    //val emptyIntent = Intent()
+    val openIntent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    }
 
-fun notificationBuilder(context:Context, title:String, content:String):NotificationCompat.Builder {
-    return NotificationCompat.Builder(context, CHANNEL_ID)
-        //.setSmallIcon(R.drawable.notification_icon)
+    val pendingActionIntent: PendingIntent =
+        PendingIntent.getActivity(context, 1, openIntent, PendingIntent.FLAG_IMMUTABLE)
+
+    val timeout:Long = 10000
+    val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        .setSmallIcon(R.drawable.chat)
         .setContentTitle(title)
-        .setContentText(content)
+        .setContentText(content+String.format("\nMessage timeout in %d seconds", timeout/1000))
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .setColor(MaterialTheme.colorScheme.primary.toArgb()) // use primary color
+        .setCategory(Notification.CATEGORY_EVENT)
+        .setSilent(true)
+        .setTimeoutAfter(timeout)
+
         //.setContentIntent(pendingIntent)
-        .setAutoCancel(true)// tap to remove notification
-}
+        .addAction(R.drawable.gamepad, "OPEN", pendingActionIntent)
+        //.setAutoCancel(true)// tap to remove notification
 
-private fun createNotificationChannel(name:String, desc:String) {
-    // As soon as app starts
-
-    // Create the NotificationChannel, but only on API 26+ because
-    // the NotificationChannel class is not in the Support Library.
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val importance = NotificationManager.IMPORTANCE_DEFAULT
-        val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
-            description = desc
+    return checkPermission("android.permission.POST_NOTIFICATIONS") {
+        with(NotificationManagerCompat.from(context)) {
+            notify(id, builder.build())
         }
-        // Register the channel with the system.
-        val notificationManager: NotificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.createNotificationChannel(channel)
     }
 }
-*/
+
+@Composable
+fun setupSaveNotification():()->Unit {
+    return setupNotification(0, "Saved changes", "Collection states and dice saved to app files")
+}
+
+
