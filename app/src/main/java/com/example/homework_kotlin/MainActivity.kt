@@ -10,6 +10,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -28,10 +32,10 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,6 +44,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,6 +52,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -93,9 +99,9 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
-import java.util.ArrayList
 
 import java.util.Random
+import kotlin.collections.ArrayList
 import kotlin.math.absoluteValue
 
 /*const val FULL_ALPHA: Int = 255 shl 24
@@ -134,6 +140,7 @@ data class AppSessionState(
     val bytes:SnapshotStateList<GeneratedByte> = mutableStateListOf(),
     var installState: AppInstallState? = null,
     var navigation:Navigation = Navigation(),
+    var sensors:AppSensors? = null
 )
 
 
@@ -310,45 +317,47 @@ fun NewDiceCollectionView() {
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceEvenly,
+        verticalArrangement = Arrangement.SpaceAround,
         modifier = Modifier
             .padding(horizontal = 10.dp, vertical = 30.dp)
             .fillMaxHeight()
     ) {
-        TextButton(
-            onClick = {
-                imageLauncher.launch(
-                    PickVisualMediaRequest(mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
-            },
-            modifier = Modifier
-                .height(200.dp)//if (image.value == null) 50.dp else 150.dp)
-                .padding(5.dp)
-                .fillMaxWidth(),
-            contentPadding = PaddingValues(0.dp),
-            shape = RectangleShape,
-        ) {
-            if (image.value==null) {
-                Text(
-                    "select image (optional)",
-                    fontSize = fontSize1,
+        Column {
+            Button(
+                onClick = {
+                    imageLauncher.launch(
+                        PickVisualMediaRequest(mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
-            }
-            else {
-                image.value?.let {
-                    val painter = rememberAsyncImagePainter(it)
-                    Image(painter = painter,
-                        null,
-                        modifier = Modifier.fillMaxSize()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1F)
+                    .padding(vertical=5.dp),
+                contentPadding = PaddingValues(0.dp),
+                shape = RectangleShape,
+                colors = (
+                        if (image.value != null) ButtonColors(Color.Transparent, Color.Transparent, Color.Transparent, Color.Transparent)
+                        else ButtonDefaults.buttonColors()
+                        ),
+            ) {
+                if (image.value==null) {
+                    Text(
+                        "select image (optional)",
+                        fontSize = fontSize1,
                     )
                 }
+                else {
+                    image.value?.let {
+                        val painter = rememberAsyncImagePainter(it)
+                        Image(painter = painter,
+                            null,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
             }
-        }
 
-
-        var name by remember { mutableStateOf("") }
-
-        Column {
+            var name by remember { mutableStateOf("") }
             TextField(
                 name, { name = it },
                 label = {
@@ -429,7 +438,6 @@ fun DiceCollectionCard(collection: DiceCollection) {
         modifier = Modifier.padding(5.dp),
         contentPadding = PaddingValues(0.dp),
         shape = RectangleShape,
-        //enabled = collection.dice.size>0,
         colors = ButtonColors(
             (if (collection.dice.size==0) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary),
             MaterialTheme.colorScheme.onPrimary,
@@ -655,6 +663,8 @@ fun ByteGenView() {
 @SuppressLint("DefaultLocale")
 @Composable
 fun StatisticsView() {
+    val string = remember { mutableStateOf("") }
+    val gravData = remember { appState.sensors!!.gravData }
     Column (
         //verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -673,17 +683,21 @@ fun StatisticsView() {
             )
         }
 
-        var string = "Launches: "+appState.installState?.timesLaunched.toString()
-        string += "\nSeed: "+appState.seed.toString()
+        string.value = "Launches: "+appState.installState?.timesLaunched.toString()
+        string.value += "\nSeed: "+appState.seed.toString()
         val collections = appState.installState?.diceCollections!!
-        string += String.format("\nCollections: %d", collections.size)
+        string.value += String.format("\nCollections: %d", collections.size)
         var diceCount = 0
         collections.forEach {
             diceCount += it.value.dice.size
         }
-        string += String.format("\nCollection Dice: %d", diceCount)
+        string.value += String.format("\nCollection Dice: %d", diceCount)
+        gravData.value?.let {
+            string.value += String.format("\nGravity XYZ: %.3f, %.3f, %.3f", it.x, it.y, it.z)
+            //string += String.format("\nOrientation: ??")
+        }
         Text(
-            string,
+            string.value,
             fontSize = fontSize1,
             lineHeight = fontSize1 * 1.5,
         )
@@ -750,7 +764,7 @@ fun PrimaryView() {
                     .padding(end = 5.dp),
             ) {
                 Text(
-                    "clean empty",
+                    "clear empty",
                     fontSize = fontSize0,
                 )
             }
@@ -803,6 +817,7 @@ fun NavigableViews() {
     val context = LocalContext.current
     val navController = rememberNavController()
     appState.navigation.controller = navController
+    appState.sensors = AppSensors(context)
     val startBackgroundService = {
         context.startService(Intent(context, BackgroundService::class.java))
     }
@@ -819,15 +834,24 @@ fun NavigableViews() {
         println(appState.installState.toString())
     }
     CustomEventListener {
-        println(it.targetState.name+" "+it.name)
+        //println(it.targetState.name+" "+it.name)
         when (it){
             Lifecycle.Event.ON_RESUME ->
+            {
                 stopBackgroundService()
+                appState.sensors!!.start()
+            }
             Lifecycle.Event.ON_PAUSE ->
-                startBackgroundService()
-            Lifecycle.Event.ON_DESTROY -> {
-                //startBackgroundService() -> needs foreground permissions to work properly
+            {
+                startBackgroundService()// needs foreground permissions to work indefinitely
+                appState.sensors!!.stop()
+            }
+
+            Lifecycle.Event.ON_DESTROY ->
+            {
+                //startBackgroundService()// needs foreground permissions to work indefinitely
                 stopBackgroundService()
+                appState.sensors!!.stop()
                 appState.installState = null
                 appState.bytes.clear()
             }
@@ -921,4 +945,49 @@ fun setupSaveNotification():()->Unit {
 }
 
 
+// SENSORS
+data class SensorDataPoint(val x:Float, val y:Float, val z:Float) {
+    //val distance:Double = sqrt(x.toDouble()*x+y*y+z*z)
+    //val tilt:Double = 180*(atan2(y.toDouble(), x.toDouble()))/PI // 90 degrees when x is zero
+    //val twist:Double = 180*(atan2(z.toDouble(), x.toDouble()))/PI
+    //val rotation:Double = 180*(atan2(y.toDouble(), z.toDouble()))/PI
+}
 
+class AppSensors(context: Context) : SensorEventListener {
+    //val output = ArrayDeque<SensorDataPoint>()
+    private val manager:SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val grav:Sensor? = manager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+    var gravData:MutableState<SensorDataPoint?> = mutableStateOf(null)
+
+    fun stop() {
+        manager.unregisterListener(this)
+    }
+    fun start() {
+        grav?.let {
+            manager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        //println(accuracy.toString())
+    }
+    @SuppressLint("DefaultLocale")
+    override fun onSensorChanged(event: SensorEvent?) {
+        event?.let {
+            //println(it.sensor.name+" "+it.sensor.type.toString())
+            when (it.sensor.type) {
+                Sensor.TYPE_GRAVITY ->
+                {
+                    gravData.value = SensorDataPoint(it.values[0], it.values[1], it.values[2])
+                    /*output.add(point)
+                    if (output.size>10) { // remove overflow
+                        val removed = output.removeFirst()
+                        println(String.format("%.3f, %.3f, %.3f, %.3f, %.3f", removed.x, removed.y, removed.z, removed.distance, removed.tilt))
+                    }*/
+                }
+                else -> {}
+            }
+
+        }
+    }
+}
