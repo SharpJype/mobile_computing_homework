@@ -24,7 +24,7 @@ fun backgroundNotificationBuilder(context: Context, tick:Int):NotificationCompat
     val pendingIntent: PendingIntent =
         PendingIntent.getActivity(context, 1, openIntent, PendingIntent.FLAG_IMMUTABLE)
 
-    val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+    val builder = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
         .setSmallIcon(R.drawable.chat)
         .setContentTitle(title)
         .setContentText(content)
@@ -39,20 +39,20 @@ fun backgroundNotificationBuilder(context: Context, tick:Int):NotificationCompat
 fun backgroundNotification(context: Context, tick:Int):()->Unit {
     val id = 1
     val builder = backgroundNotificationBuilder(context, tick)
-    return checkPermission(context, "android.permission.POST_NOTIFICATIONS") {
-        with(NotificationManagerCompat.from(context)) {
-            notify(id, builder.build())
+    return {
+        checkPermission(context, "android.permission.POST_NOTIFICATIONS") {
+            with(NotificationManagerCompat.from(context)) {
+                notify(id, builder.build())
+            }
         }
     }
 }
 
-class BackgroundTimerTask:TimerTask() {
+class BackgroundTimerTask(context: Context):TimerTask() {
     private var tick:Int = 0
-    var context:Context? = null
-    var lambda:()->Unit = {
+    val lambda:()->Unit = {
         tick += tickRate
-        //println(tick.toString())
-        context?.let {backgroundNotification(it, tick)()}
+        backgroundNotification(context, tick)()
     }
     override fun run() {
         lambda()
@@ -65,8 +65,7 @@ class BackgroundService:Service() {
     override fun onStartCommand(intent:Intent, flags: Int, startId: Int): Int {
         timer.cancel()// stop old
         timer = Timer()
-        val task = BackgroundTimerTask()
-        task.context = this
+        val task = BackgroundTimerTask(this)
         val rate = tickRate*1000.toLong()
         timer.schedule(task, rate, rate)
         return START_STICKY

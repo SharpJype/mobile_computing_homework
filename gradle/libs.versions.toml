@@ -1,20 +1,20 @@
 [versions]
 accompanistPermissions = "<latest_version>"
-agp = "8.8.0"
-coilCompose = "2.3.0"
+agp = "8.8.1"
+coilCompose = "2.7.0"
 graphicsShapes = "1.0.1"
 kotlin = "2.0.0"
 coreKtx = "1.15.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
-kotlinxSerializationJson = "1.7.3"
+kotlinxSerializationJson = "1.8.0"
 lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.10.0"
-composeBom = "2024.04.01"
-navigationDynamicFeaturesFragment = "2.8.5"
+composeBom = "2025.02.00"
+navigationDynamicFeaturesFragment = "2.8.7"
 volley = "1.2.1"
-appcompat = "1.2.0"
+appcompat = "1.7.0"
 
 [libraries]
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanistPermissions" }

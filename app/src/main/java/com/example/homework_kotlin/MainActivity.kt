@@ -9,6 +9,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -18,13 +19,14 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.collection.mutableIntListOf
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,8 +72,10 @@ import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
@@ -87,7 +91,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 
@@ -104,14 +107,9 @@ import java.util.Random
 import kotlin.collections.ArrayList
 import kotlin.math.absoluteValue
 
-/*const val FULL_ALPHA: Int = 255 shl 24
-fun randomFullColor(rng:Random):Int {
-    return rng.nextInt().absoluteValue or FULL_ALPHA
-}*/
-
 // CONSTANTS
 const val INSTALL_STATE_FILENAME = "installState"
-const val CHANNEL_ID = "diceAppChannelId"
+const val NOTIFICATION_CHANNEL_ID = "main"
 
 
 // BASE CLASSES
@@ -123,7 +121,7 @@ data class AppInstallState(
 )
 
 
-class Navigation {
+class AppNavigation {
     var controller:NavController? = null
     val statistics = {controller?.navigate(route="statistics")}
     val back = {controller?.navigateUp()}
@@ -134,25 +132,22 @@ class Navigation {
     }
 }
 
+class AppNotifications {
+    var save:()->Unit = {}
+}
+
 data class AppSessionState(
     var seed: Long,
     val rng: Random,
-    val bytes:SnapshotStateList<GeneratedByte> = mutableStateListOf(),
-    var installState: AppInstallState? = null,
-    var navigation:Navigation = Navigation(),
-    var sensors:AppSensors? = null
+    val bytes:SnapshotStateList<Int> = mutableStateListOf<Int>(),
+    var initialized:Boolean = false,
+    var installState: AppInstallState = AppInstallState(),
+    var navigation:AppNavigation = AppNavigation(),
+    var sensors:AppSensors? = null,
+    val notifications:AppNotifications = AppNotifications()
 )
 
 
-
-
-
-
-class GeneratedByte (rng:Random) {
-    val value = rng.nextInt().absoluteValue%256
-    val color = rng.nextFloat()*360
-    val size = 30F+rng.nextFloat()*30
-}
 
 @Serializable
 data class Die(
@@ -170,28 +165,135 @@ data class DiceCollection(
 
 
 
+/// PERMISSIONS
+@Composable
+fun askPermission(permission: String, onRefused: ()->Unit={}, onGranted: ()->Unit={}):()->Unit {
+    val result = remember { mutableStateOf<Boolean?>(null) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        result.value = it
+        if (it) onGranted()
+        else onRefused()
+    }
+    return {
+        when (result.value) {
+            null -> launcher.launch(permission)
+            true -> onGranted()
+            else -> onRefused()
+        }
+    }
+}
+
+fun checkPermission(context: Context, permission: String, onRefused:()->Unit = {}, onGranted:()->Unit = {}) {
+    when (PackageManager.PERMISSION_GRANTED) {
+        ContextCompat.checkSelfPermission(context, permission) -> onGranted()
+        else -> onRefused()
+    }
+}
+
+// NOTIFICATIONS
+private fun createNotificationChannel(context: Context) {
+    // Create the NotificationChannel, but only on API 26+ because
+    // the NotificationChannel class is not in the Support Library.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, "diceBoxNotifications", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "description"
+        }
+        // Register the channel with the system.
+        val notificationManager: NotificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
+    }
+}
+
+@SuppressLint("DefaultLocale", "MissingPermission")
+@Composable
+fun prepareNotification(title:String, body:String, timeout:Long? = null, id:Int = 0):()->Unit {
+    val context = LocalContext.current
+    val openIntent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    }
+    val pendingActionIntent: PendingIntent =
+        PendingIntent.getActivity(context, 1, openIntent, PendingIntent.FLAG_IMMUTABLE)
+
+    val builder = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
+        .setSmallIcon(R.drawable.chat)
+        .setContentTitle(title)
+        .setContentText(body+(if (timeout!=null) String.format("\nTimeout in %d seconds", timeout/1000) else ""))
+        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .setColor(MaterialTheme.colorScheme.primary.toArgb()) // use primary color
+        .setCategory(Notification.CATEGORY_EVENT)
+        .setSilent(true)
+        .addAction(R.drawable.gamepad, "OPEN", pendingActionIntent)
+
+    if (timeout!=null) builder.setTimeoutAfter(timeout)
+    return {
+        checkPermission(context, "android.permission.POST_NOTIFICATIONS") {
+            with(NotificationManagerCompat.from(context)) {
+                notify(id, builder.build())
+            }
+        }
+    }
+}
+
+
+// SENSORS
+data class SensorDataPoint(val x:Float, val y:Float, val z:Float)
+class AppSensors(context: Context) : SensorEventListener {
+    //val output = ArrayDeque<SensorDataPoint>()
+    private val manager:SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val grav:Sensor? = manager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+    var gravData:MutableState<SensorDataPoint?> = mutableStateOf(null)
+
+    fun stop() {
+        manager.unregisterListener(this)
+    }
+    fun start() {
+        grav?.let {
+            manager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        //println(accuracy.toString())
+    }
+    @SuppressLint("DefaultLocale")
+    override fun onSensorChanged(event: SensorEvent?) {
+        event?.let {
+            //println(it.sensor.name+" "+it.sensor.type.toString())
+            when (it.sensor.type) {
+                Sensor.TYPE_GRAVITY ->
+                {
+                    gravData.value = SensorDataPoint(it.values[0], it.values[1], it.values[2])
+                }
+                else -> {}
+            }
+
+        }
+    }
+}
+
+
+
 
 
 // FILE OPERATION FUNCTIONS
-fun saveInstallState(file:File, installState:AppInstallState) {
+fun saveInstallState(file:File) {
     val writeStream = file.outputStream()
-    val bytes = Json.encodeToString(installState).encodeToByteArray()
+    val bytes = Json.encodeToString(appState.installState).encodeToByteArray()
     writeStream.write(bytes)
     writeStream.close()
 }
-fun loadInstallState(file:File):AppInstallState {
-    var installState = AppInstallState()
+fun loadInstallState(file:File) {
     if (file.exists()) {
         val readStream = file.inputStream()
         val buffer = ByteArray(file.length().toInt())
         readStream.read(buffer)
         readStream.close()
         val withUnknownKeys = Json {ignoreUnknownKeys=true}
-        installState = withUnknownKeys.decodeFromString<AppInstallState>(buffer.decodeToString())
+        appState.installState = withUnknownKeys.decodeFromString<AppInstallState>(buffer.decodeToString())
     }
-    installState.timesLaunched++
-    saveInstallState(file, installState)
-    return installState
+    appState.installState.timesLaunched++
+    saveInstallState(file)
 }
 
 ////// original from -> https://medium.com/@bdulahad/file-from-uri-content-scheme-ac51c10c8331
@@ -243,9 +345,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
 @Composable
-fun CustomEventListener(onEvent:(event: Lifecycle.Event) -> Unit) {
+fun LifecycleEventListener(onEvent:(event: Lifecycle.Event) -> Unit) {
     val eventHandler = rememberUpdatedState(newValue = onEvent)
     val lifecycleOwner = rememberUpdatedState(newValue = LocalLifecycleOwner.current)
 
@@ -313,7 +414,7 @@ fun NewDiceCollectionView() {
             }
         }
     )
-    val saveNotification = setupSaveNotification()
+    //val askPermission = askPermission("android.permission.POST_NOTIFICATIONS") {appState.notifications.save()}
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -332,7 +433,7 @@ fun NewDiceCollectionView() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1F)
-                    .padding(vertical=5.dp),
+                    .padding(vertical = 5.dp),
                 contentPadding = PaddingValues(0.dp),
                 shape = RectangleShape,
                 colors = (
@@ -404,12 +505,9 @@ fun NewDiceCollectionView() {
                                 fileFromContentUri(context, it, copiedFile)
                                 newCollection.imagePath = copiedFile.path
                             }
-                            appState.installState!!.diceCollections[name] = newCollection
-                            saveInstallState(
-                                File(context.filesDir, INSTALL_STATE_FILENAME),
-                                appState.installState!!
-                            )
-                            saveNotification()
+                            appState.installState.diceCollections[name] = newCollection
+                            saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
+                            appState.notifications.save()
                             appState.navigation.back()
                         }
                     },
@@ -483,19 +581,17 @@ fun DiceCollectionView(collection:DiceCollection) {
         }
         list
     }
+    val anyChanges = remember { mutableStateOf(false) }
     fun rollDie(die:Die) {
         die.roll = (1+appState.rng.nextInt().absoluteValue%die.sides).toShort()
     }
 
-    val anyChanges = remember { mutableStateOf(false) }
-    val saveNotification = setupSaveNotification()
 
     Column(verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .padding(horizontal = 10.dp, vertical = 30.dp)
             .fillMaxSize()
-            .verticalScroll(rememberScrollState(0))
     ) {
         FlowRow(
             modifier = Modifier
@@ -566,7 +662,7 @@ fun DiceCollectionView(collection:DiceCollection) {
                     dice.add(updateDie)
                     dice.remove(updateDie)
                     anyChanges.value = true
-                          },
+                },
             ) {
                 Text("reroll",
                     fontSize = fontSize1
@@ -575,8 +671,8 @@ fun DiceCollectionView(collection:DiceCollection) {
             TextButton(
                 onClick = {
                     if (anyChanges.value) {
-                        saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
-                        saveNotification()
+                        saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
+                        appState.notifications.save()
                     }
                     appState.navigation.back()
                 },
@@ -602,23 +698,34 @@ fun DiceCollectionView(collection:DiceCollection) {
 
 
 
-
+@SuppressLint("DefaultLocale")
 @Composable
 fun ByteGenView() {
-    Column (verticalArrangement = Arrangement.Top,
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val content = @Composable {
+        Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .padding(horizontal = 10.dp, vertical = 30.dp)
-                .fillMaxWidth()
-    ) {
-
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            TextButton(onClick = {appState.navigation.back()}
+                .fillMaxWidth(.5F)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    "back",
-                    fontSize = fontSize1,
-                )
+                TextButton(onClick = {appState.navigation.back()}
+                ) {
+                    Text(
+                        "back",
+                        fontSize = fontSize1,
+                    )
+                }
+                TextButton(onClick = {appState.bytes.clear()}
+                        ) {
+                    Text(
+                        "clear",
+                        fontSize = fontSize1,
+                    )
+                }
             }
             Image(painter = painterResource(
                 id = R.drawable.campfire_w_sword),
@@ -629,8 +736,9 @@ fun ByteGenView() {
             )
             Button(
                 onClick = {
-                    appState.bytes.add(GeneratedByte(appState.rng))
+                    appState.bytes.add(appState.rng.nextInt().absoluteValue%256)
                 },
+                modifier = Modifier.padding(vertical = 5.dp)
             ) {
                 Text(
                     "generate bytes",
@@ -640,22 +748,38 @@ fun ByteGenView() {
         }
         LazyColumn (
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Top,
             modifier = Modifier
-                .weight(1F)
-        ) {
-            items(appState.bytes) {item ->
+                .fillMaxSize()
+            ) {
+            items(appState.bytes) { value ->
                 var binary = ""
                 for (i in 0..7) {
-                    binary += ((item.value shr 7-i)%2).toString()
+                    binary += ((value shr 7-i)%2).toString()
                 }
                 Text(
-                    String.format("%2H", item.value)+" : "+binary,
-                    color = Color.hsl(item.color, 0.5F, 0.5F),
-                    fontSize = item.size.sp/2,
+                    String.format("%3d : %2H : %s", value, value, binary),
+                    fontSize = fontSize2,
+                    fontFamily = FontFamily.Monospace,
                 )
-
             }
         }
+    }
+
+    if (!landscape) {
+        Column (verticalArrangement = Arrangement.Top,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .padding(horizontal = 10.dp, vertical = 30.dp)
+                .fillMaxSize()
+        ) {content()}
+    }
+    else {
+        Row (horizontalArrangement = Arrangement.SpaceAround,
+            modifier = Modifier
+                .padding(horizontal = 10.dp, vertical = 30.dp)
+                .fillMaxSize()
+        ) {content()}
     }
 }
 
@@ -683,9 +807,9 @@ fun StatisticsView() {
             )
         }
 
-        string.value = "Launches: "+appState.installState?.timesLaunched.toString()
+        string.value = "Launches: "+appState.installState.timesLaunched.toString()
         string.value += "\nSeed: "+appState.seed.toString()
-        val collections = appState.installState?.diceCollections!!
+        val collections = appState.installState.diceCollections
         string.value += String.format("\nCollections: %d", collections.size)
         var diceCount = 0
         collections.forEach {
@@ -709,10 +833,9 @@ fun StatisticsView() {
 @Composable
 fun PrimaryView() {
     val context = LocalContext.current
-    val collections = appState.installState!!.diceCollections
+    val collections = appState.installState.diceCollections
     val count = remember { mutableIntStateOf(collections.size) } // to detect updates to collections
 
-    val saveNotification = setupSaveNotification()
     Column(verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -753,11 +876,10 @@ fun PrimaryView() {
                     }
                     // save instantly if something was cleared
                     if (count.intValue!=collections.size) {
-                        saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME), appState.installState!!)
-                        saveNotification()
+                        saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
+                        appState.notifications.save()
                     }
                     count.intValue = collections.size
-
                 },
                 modifier = Modifier
                     .weight(1F)
@@ -809,6 +931,7 @@ fun PrimaryView() {
 
 
 
+
 @Serializable
 data class DiceCollectionRoute(val name: String)
 
@@ -818,23 +941,29 @@ fun NavigableViews() {
     val navController = rememberNavController()
     appState.navigation.controller = navController
     appState.sensors = AppSensors(context)
-    val startBackgroundService = {
+    val startBackgroundService = {// needs foreground permissions to work indefinitely
         context.startService(Intent(context, BackgroundService::class.java))
     }
     val stopBackgroundService = {
         context.stopService(Intent(context, BackgroundService::class.java))
     }
+    val saveNotification = prepareNotification("Saved", "Saved changes to collections and their dice", timeout=10000)
+    val saveNotificationPermission = askPermission("android.permission.POST_NOTIFICATIONS") {saveNotification()}
+    appState.notifications.save = {
+        saveNotificationPermission()
+        saveNotification()
+    }
 
-    if (appState.installState==null) { // initialize
-        createNotificationChannel(context, "DiceBoxNotifications", "description")
+    if (!appState.initialized) { // initialize
+        createNotificationChannel(context)
         appState.seed = appState.rng.nextLong().absoluteValue%(1 shl 16)
         appState.rng.setSeed(appState.seed)
         val installFile = File(context.filesDir, INSTALL_STATE_FILENAME)
-        appState.installState = loadInstallState(installFile)
-        println(appState.installState.toString())
+        loadInstallState(installFile)
+        appState.initialized = true
     }
-    CustomEventListener {
-        //println(it.targetState.name+" "+it.name)
+    LifecycleEventListener {
+        println(it.targetState.name+" "+it.name)
         when (it){
             Lifecycle.Event.ON_RESUME ->
             {
@@ -843,17 +972,13 @@ fun NavigableViews() {
             }
             Lifecycle.Event.ON_PAUSE ->
             {
-                startBackgroundService()// needs foreground permissions to work indefinitely
+                startBackgroundService()
                 appState.sensors!!.stop()
             }
-
             Lifecycle.Event.ON_DESTROY ->
             {
-                //startBackgroundService()// needs foreground permissions to work indefinitely
                 stopBackgroundService()
                 appState.sensors!!.stop()
-                appState.installState = null
-                appState.bytes.clear()
             }
             else -> {}
         }
@@ -861,7 +986,7 @@ fun NavigableViews() {
     NavHost(navController, startDestination = "primary") {
         composable<DiceCollectionRoute> { backStackEntry ->
             val route = backStackEntry.toRoute<DiceCollectionRoute>()
-            val collection = appState.installState!!.diceCollections.getValue(route.name)
+            val collection = appState.installState.diceCollections.getValue(route.name)
             DiceCollectionView(collection)
         }
         composable("primary") {PrimaryView()}
@@ -871,123 +996,3 @@ fun NavigableViews() {
     }
 }
 
-
-
-
-/// PERMISSIONS
-@Composable
-fun checkPermissionNotification(onPermissionGranted:()->Unit):()->Unit {
-    val permission = "android.permission.POST_NOTIFICATIONS"
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) {if (it) onPermissionGranted()}
-    return checkPermission(LocalContext.current, permission, launcher, onPermissionGranted)
-}
-
-fun checkPermission(context: Context, permission: String, launcher:ManagedActivityResultLauncher<String,Boolean>? = null, onPermissionGranted:()->Unit):()->Unit {
-    return {
-        when (PackageManager.PERMISSION_GRANTED) {
-            ContextCompat.checkSelfPermission(context, permission) -> onPermissionGranted()
-            else -> launcher?.launch(permission)// can use launcher to ask permission with
-        }
-    }
-}
-
-
-// NOTIFICATIONS
-private fun createNotificationChannel(context: Context, name:String, desc:String) {
-    // Create the NotificationChannel, but only on API 26+ because
-    // the NotificationChannel class is not in the Support Library.
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = desc
-        }
-        // Register the channel with the system.
-        val notificationManager: NotificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.createNotificationChannel(channel)
-    }
-}
-
-@SuppressLint("DefaultLocale", "MissingPermission")
-@Composable
-fun setupSaveNotification():()->Unit {
-    val id = 0
-    val title = "Saved changes"
-    val content = "Collection states and dice saved to app files"
-    val context = LocalContext.current
-
-    val openIntent = Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-    }
-
-    val pendingActionIntent: PendingIntent =
-        PendingIntent.getActivity(context, 1, openIntent, PendingIntent.FLAG_IMMUTABLE)
-
-    val timeout:Long = 10000
-    val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-        .setSmallIcon(R.drawable.chat)
-        .setContentTitle(title)
-        .setContentText(content+String.format("\nMessage timeout in %d seconds", timeout/1000))
-        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-        .setColor(MaterialTheme.colorScheme.primary.toArgb()) // use primary color
-        .setCategory(Notification.CATEGORY_EVENT)
-        .setSilent(true)
-        .setTimeoutAfter(timeout)
-
-        .addAction(R.drawable.gamepad, "OPEN", pendingActionIntent)
-
-    return checkPermissionNotification {
-        with(NotificationManagerCompat.from(context)) {
-            notify(id, builder.build())
-        }
-    }
-}
-
-
-// SENSORS
-data class SensorDataPoint(val x:Float, val y:Float, val z:Float) {
-    //val distance:Double = sqrt(x.toDouble()*x+y*y+z*z)
-    //val tilt:Double = 180*(atan2(y.toDouble(), x.toDouble()))/PI // 90 degrees when x is zero
-    //val twist:Double = 180*(atan2(z.toDouble(), x.toDouble()))/PI
-    //val rotation:Double = 180*(atan2(y.toDouble(), z.toDouble()))/PI
-}
-
-class AppSensors(context: Context) : SensorEventListener {
-    //val output = ArrayDeque<SensorDataPoint>()
-    private val manager:SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private val grav:Sensor? = manager.getDefaultSensor(Sensor.TYPE_GRAVITY)
-    var gravData:MutableState<SensorDataPoint?> = mutableStateOf(null)
-
-    fun stop() {
-        manager.unregisterListener(this)
-    }
-    fun start() {
-        grav?.let {
-            manager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
-        }
-    }
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        //println(accuracy.toString())
-    }
-    @SuppressLint("DefaultLocale")
-    override fun onSensorChanged(event: SensorEvent?) {
-        event?.let {
-            //println(it.sensor.name+" "+it.sensor.type.toString())
-            when (it.sensor.type) {
-                Sensor.TYPE_GRAVITY ->
-                {
-                    gravData.value = SensorDataPoint(it.values[0], it.values[1], it.values[2])
-                    /*output.add(point)
-                    if (output.size>10) { // remove overflow
-                        val removed = output.removeFirst()
-                        println(String.format("%.3f, %.3f, %.3f, %.3f, %.3f", removed.x, removed.y, removed.z, removed.distance, removed.tilt))
-                    }*/
-                }
-                else -> {}
-            }
-
-        }
-    }
-}
