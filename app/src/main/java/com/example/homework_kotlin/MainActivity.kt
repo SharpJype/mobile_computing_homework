@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
@@ -96,6 +97,7 @@ import androidx.navigation.NavController
 import androidx.navigation.toRoute
 import coil.compose.rememberAsyncImagePainter
 import com.example.homework_kotlin.ui.theme.DefaultTheme
+import kotlinx.serialization.json.decodeToSequence
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -301,7 +303,7 @@ private fun fileFromContentUri(context: Context, contentUri: Uri, file:File) {
         val outputStream = FileOutputStream(file)
         val inputStream = context.contentResolver.openInputStream(contentUri)
         inputStream?.let {
-            copy(inputStream, outputStream)
+            copy(it, outputStream)
         }
         outputStream.flush()
     } catch (e: Exception) {
@@ -387,16 +389,15 @@ fun DieIcon(die:Die) {
                 }
             }
     ) {
-        Row(modifier = Modifier.size(100.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                die.roll.toString(),
-                fontSize = fontSize2,
-                color = MaterialTheme.colorScheme.onPrimary,
-            )
-        }
+        Text(
+            die.roll.toString(),
+            fontSize = fontSize2,
+            color = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top=27.dp),
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -711,9 +712,8 @@ fun DiceCollectionView(collection:DiceCollection) {
                 DieIcon(Die(sides.toShort(), sides.toShort()))
                 //Text(sides.toString(), fontSize = 60.sp)
             }
-            TextButton(onClick={
-                sides++
-            }){
+            TextButton(onClick={sides++}
+            ){
                 Text(
                     "+",
                     fontSize = fontSize2,
