@@ -24,9 +24,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.collection.mutableIntListOf
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -139,7 +137,7 @@ class AppNotifications {
 data class AppSessionState(
     var seed: Long,
     val rng: Random,
-    val bytes:SnapshotStateList<Int> = mutableStateListOf<Int>(),
+    val bytes:SnapshotStateList<Int> = mutableStateListOf(),
     var initialized:Boolean = false,
     var installState: AppInstallState = AppInstallState(),
     var navigation:AppNavigation = AppNavigation(),
@@ -404,6 +402,7 @@ fun DieIcon(die:Die) {
 
 @Composable
 fun NewDiceCollectionView() {
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val context = LocalContext.current
     val image = remember {mutableStateOf<Uri?>(null) }
     val imageLauncher = rememberLauncherForActivityResult(
@@ -414,113 +413,144 @@ fun NewDiceCollectionView() {
             }
         }
     )
-    //val askPermission = askPermission("android.permission.POST_NOTIFICATIONS") {appState.notifications.save()}
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceAround,
-        modifier = Modifier
-            .padding(horizontal = 10.dp, vertical = 30.dp)
-            .fillMaxHeight()
-    ) {
-        Column {
-            Button(
-                onClick = {
-                    imageLauncher.launch(
-                        PickVisualMediaRequest(mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1F)
-                    .padding(vertical = 5.dp),
-                contentPadding = PaddingValues(0.dp),
-                shape = RectangleShape,
-                colors = (
-                        if (image.value != null) ButtonColors(Color.Transparent, Color.Transparent, Color.Transparent, Color.Transparent)
-                        else ButtonDefaults.buttonColors()
-                        ),
-            ) {
-                if (image.value==null) {
-                    Text(
-                        "select image (optional)",
-                        fontSize = fontSize1,
-                    )
-                }
-                else {
-                    image.value?.let {
-                        val painter = rememberAsyncImagePainter(it)
-                        Image(painter = painter,
-                            null,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
+    val buttonImage = @Composable {
+        Button(
+            onClick = {
+                imageLauncher.launch(
+                    PickVisualMediaRequest(mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            modifier = Modifier
+                .aspectRatio(1F)
+                .fillMaxSize(),
+            contentPadding = PaddingValues(0.dp),
+            shape = RectangleShape,
+            colors = (
+                    if (image.value != null) ButtonColors(Color.Transparent, Color.Transparent, Color.Transparent, Color.Transparent)
+                    else ButtonDefaults.buttonColors()
+                    ),
+        ) {
+            if (image.value==null) {
+                Text(
+                    "select image (optional)",
+                    fontSize = fontSize1,
+                )
             }
-
-            var name by remember { mutableStateOf("") }
-            TextField(
-                name, { name = it },
-                label = {
-                    Text(
-                        "name (required)",
-                        fontSize = fontSize1,
+            else {
+                image.value?.let {
+                    val painter = rememberAsyncImagePainter(it)
+                    Image(painter = painter,
+                        null,
+                        modifier = Modifier.fillMaxSize()
                     )
-                },
-                shape = RectangleShape,
-                modifier = Modifier
-                    .padding(vertical = 10.dp)
-                    .fillMaxWidth(),
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                TextButton(
-                    onClick = {
-                        appState.navigation.back()
-                    },
-                ) {
-                    Text(
-                        "cancel",
-                        fontSize = fontSize1,
-                        )
-                }
-                Button(
-                    onClick = {
-                        if (name.isNotEmpty()) {
-                            val newCollection = DiceCollection(name)
-                            // copy image to app files
-                            image.value?.let {
-                                /*var copiedFile:File? = null
-                            it.path?.let { it1 ->//use the picked gallery path -> less duplicate images
-                                {copiedFile = File(context.filesDir, it1)}
-                            }
-                            if (copiedFile==null) {
-                                copiedFile = File(context.filesDir, name)
-                            }*/
-                                val copiedFile =
-                                    File(context.filesDir, name)// always make a new copy of image
-                                fileFromContentUri(context, it, copiedFile)
-                                newCollection.imagePath = copiedFile.path
-                            }
-                            appState.installState.diceCollections[name] = newCollection
-                            saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
-                            appState.notifications.save()
-                            appState.navigation.back()
-                        }
-                    },
-                ) {
-                    Text(
-                        "confirm",
-                        fontSize = fontSize1,
-                        )
                 }
             }
         }
-
     }
+
+    val textField = @Composable {
+        var name by remember { mutableStateOf("") }
+        TextField(
+            name, { name = it },
+            label = {
+                Text(
+                    "enter name (required)",
+                    fontSize = fontSize1,
+                )
+            },
+            shape = RectangleShape,
+            modifier = Modifier
+                .padding(vertical = 10.dp)
+                .fillMaxWidth(),
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            TextButton(
+                onClick = {
+                    appState.navigation.back()
+                },
+            ) {
+                Text(
+                    "cancel",
+                    fontSize = fontSize1,
+                )
+            }
+            Button(
+                onClick = {
+                    if (name.isNotEmpty()) {
+                        val newCollection = DiceCollection(name)
+                        // copy image to app files
+                        image.value?.let {
+                            val copiedFile =
+                                File(context.filesDir, name)// always make a new copy of image
+                            fileFromContentUri(context, it, copiedFile)
+                            newCollection.imagePath = copiedFile.path
+                        }
+                        appState.installState.diceCollections[name] = newCollection
+                        saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
+                        appState.notifications.save()
+                        appState.navigation.back()
+                    }
+                },
+            ) {
+                Text(
+                    "confirm",
+                    fontSize = fontSize1,
+                )
+            }
+        }
+    }
+
+    if (landscape) {
+        Row(
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .padding(horizontal = 30.dp, vertical = 10.dp)
+                .fillMaxSize()
+        ) {
+            Box (
+                modifier = Modifier
+                    .weight(1F)
+            ) {
+                buttonImage()
+            }
+            Column (
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .weight(1F)
+            ) {
+                textField()
+            }
+        }
+    }
+    else {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceAround,
+            modifier = Modifier
+                .padding(horizontal = 10.dp, vertical = 30.dp)
+                .fillMaxSize()
+        ) {
+            Box (
+                modifier = Modifier
+                    .weight(1F)
+            ) {
+                buttonImage()
+            }
+            Column (
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .weight(1F)
+            ) {
+                textField()
+            }
+        }
+    }
+
 }
 
 
@@ -572,6 +602,7 @@ fun DiceCollectionCard(collection: DiceCollection) {
 @SuppressLint("DefaultLocale")
 @Composable
 fun DiceCollectionView(collection:DiceCollection) {
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val context = LocalContext.current
     var sides by remember { mutableIntStateOf(6) }
     val dice = remember {
@@ -586,16 +617,10 @@ fun DiceCollectionView(collection:DiceCollection) {
         die.roll = (1+appState.rng.nextInt().absoluteValue%die.sides).toShort()
     }
 
-
-    Column(verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .padding(horizontal = 10.dp, vertical = 30.dp)
-            .fillMaxSize()
-    ) {
+    val diceTable = @Composable {
         FlowRow(
             modifier = Modifier
-                .weight(1F)
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState(0)),
         ) {
             dice.forEach {
@@ -611,10 +636,56 @@ fun DiceCollectionView(collection:DiceCollection) {
                 }
             }
         }
+    }
 
+    val buttonRoll = @Composable {
+        TextButton(
+            onClick = {
+                dice.forEach {
+                    rollDie(it)
+                }
+                val updateDie = Die(1, 1)// force visual update to dice
+                dice.add(updateDie)
+                dice.remove(updateDie)
+                anyChanges.value = true
+            },
+        ) {
+            Text("roll",
+                fontSize = fontSize1
+            )
+        }
+    }
+    val buttonClose = @Composable {
+        TextButton(
+            onClick = {
+                if (anyChanges.value) {
+                    saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
+                    appState.notifications.save()
+                }
+                appState.navigation.back()
+            },
+        ) {
+            Text((if (anyChanges.value) "save & close" else "close"),
+                fontSize = fontSize1
+            )
+        }
+    }
+    val buttonSort = @Composable {
+        TextButton(
+            onClick = {
+                dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
+                collection.dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
+                anyChanges.value = true
+            },
+        ) {
+            Text("sort",
+                fontSize = fontSize1
+            )
+        }
+    }
+    val diceAdder = @Composable {
         Row(
             verticalAlignment=Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 50.dp)
         ) {
             TextButton(
                 onClick = {
@@ -649,48 +720,58 @@ fun DiceCollectionView(collection:DiceCollection) {
                 )
             }
         }
+    }
+
+    if (landscape) {
         Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth()
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .padding(horizontal = 30.dp, vertical = 10.dp)
+                .fillMaxSize()
         ) {
-            TextButton(
-                onClick = {
-                    dice.forEach {
-                        rollDie(it)
-                    }
-                    val updateDie = Die(1, 1)// force visual update to dice
-                    dice.add(updateDie)
-                    dice.remove(updateDie)
-                    anyChanges.value = true
-                },
+            Column (
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .weight(1F)
             ) {
-                Text("reroll",
-                    fontSize = fontSize1
-                    )
+                diceAdder()
+                Row(
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    buttonRoll()
+                    buttonClose()
+                    buttonSort()
+                }
             }
-            TextButton(
-                onClick = {
-                    if (anyChanges.value) {
-                        saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
-                        appState.notifications.save()
-                    }
-                    appState.navigation.back()
-                },
+            Box (
+                modifier = Modifier.weight(1F)
             ) {
-                Text((if (anyChanges.value) "save & close" else "close"),
-                    fontSize = fontSize1
-                    )
+                diceTable()
             }
-            TextButton(
-                onClick = {
-                    dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
-                    collection.dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
-                    anyChanges.value = true
-                },
+        }
+    }
+    else {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .padding(horizontal = 10.dp, vertical = 30.dp)
+                .fillMaxSize()
+        ) {
+            Box (
+                modifier = Modifier.weight(1F)
             ) {
-                Text("sort",
-                    fontSize = fontSize1
-                    )
+                diceTable()
+            }
+            diceAdder()
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                buttonRoll()
+                buttonClose()
+                buttonSort()
             }
         }
     }
@@ -832,20 +913,76 @@ fun StatisticsView() {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PrimaryView() {
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val context = LocalContext.current
     val collections = appState.installState.diceCollections
     val count = remember { mutableIntStateOf(collections.size) } // to detect updates to collections
 
-    Column(verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 30.dp)
-    ) {
-
+    val buttonModifier0 = Modifier
+        .fillMaxWidth((if (landscape) 1F else .5F))
+    val buttonModifier1 = Modifier
+        .padding(start = 10.dp)
+        .fillMaxWidth(1F)
+    val buttons0 = @Composable {
+        Button(
+            onClick = {
+                collections.keys.sorted().forEach { key ->
+                    val collection = collections.getValue(key)
+                    if (collection.dice.size==0) {
+                        collection.imagePath?.let { // presumes unique image
+                            File(it).delete()
+                        }
+                        collections.remove(key)
+                    }
+                }
+                // save instantly if something was cleared
+                if (count.intValue!=collections.size) {
+                    saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
+                    appState.notifications.save()
+                }
+                count.intValue = collections.size
+            },
+            modifier = buttonModifier0
+        ) {
+            Text(
+                "clear empty",
+                fontSize = fontSize0,
+            )
+        }
+        Button(
+            onClick = {appState.navigation.newDiceSet()},
+            modifier = (if (landscape) buttonModifier0 else buttonModifier1)
+        ) {
+            Text(
+                "new collection",
+                fontSize = fontSize0,
+            )
+        }
+    }
+    val buttons1 = @Composable {
+        Button(
+            onClick = {appState.navigation.byteGen()},
+            modifier = buttonModifier0
+        ) {
+            Text(
+                "byte generator",
+                fontSize = fontSize0,
+            )
+        }
+        Button(
+            onClick = {appState.navigation.statistics()},
+            modifier = (if (landscape) buttonModifier0 else buttonModifier1)
+        ) {
+            Text(
+                "statistics",
+                fontSize = fontSize0,
+            )
+        }
+    }
+    val cards = @Composable {
         FlowRow(
             modifier = Modifier
-                .weight(1F)
+                .fillMaxHeight()
                 .verticalScroll(rememberScrollState(0)),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
@@ -857,76 +994,55 @@ fun PrimaryView() {
             }
 
         }
+    }
 
+    if (landscape) {
         Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
             modifier = Modifier
-                .padding(vertical = 5.dp)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(horizontal = 30.dp, vertical = 10.dp)
         ) {
-            Button(
-                onClick = {
-                    collections.keys.sorted().forEach { key ->
-                        val collection = collections.getValue(key)
-                        if (collection.dice.size==0) {
-                            collection.imagePath?.let { // presumes unique image
-                                File(it).delete()
-                            }
-                            collections.remove(key)
-                        }
-                    }
-                    // save instantly if something was cleared
-                    if (count.intValue!=collections.size) {
-                        saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
-                        appState.notifications.save()
-                    }
-                    count.intValue = collections.size
-                },
+            Column (
+                verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .weight(1F)
-                    .padding(end = 5.dp),
             ) {
-                Text(
-                    "clear empty",
-                    fontSize = fontSize0,
-                )
+                buttons0()
+                buttons1()
             }
-            Button(
-                onClick = {appState.navigation.newDiceSet()},
-                modifier = Modifier
-                    .weight(1F)
-                    .padding(start = 5.dp),
+            Box(modifier = Modifier
+                .weight(2F)
             ) {
-                Text(
-                    "new collection",
-                    fontSize = fontSize0,
-                )
-            }
-        }
-        Row {
-            Button(
-                onClick = {appState.navigation.byteGen()},
-                modifier = Modifier
-                    .weight(1F)
-                    .padding(end = 5.dp),
-            ) {
-                Text(
-                    "byte generator",
-                    fontSize = fontSize0,
-                )
-            }
-            Button(
-                onClick = {appState.navigation.statistics()},
-                modifier = Modifier
-                    .weight(1F)
-                    .padding(start = 5.dp),
-            ) {
-                Text(
-                    "statistics",
-                    fontSize = fontSize0,
-                )
+                cards()
             }
         }
     }
+    else {
+        Column(verticalArrangement = Arrangement.Top,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 30.dp)
+        ) {
+            Box(modifier = Modifier.weight(1F)) {
+                cards()
+            }
+            Row(
+                modifier = Modifier
+                    .padding(vertical = 5.dp)
+                    .fillMaxWidth(),
+            ) {
+                buttons0()
+            }
+            Row {
+                buttons1()
+            }
+        }
+    }
+
+
 }
 
 
