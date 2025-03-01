@@ -421,16 +421,18 @@ fun DieIcon(die:Die) {
     }
 }
 
+
+val NewDiceCollectionViewImageUri = mutableStateOf<Uri?>(null)
 @Composable
 fun NewDiceCollectionView() {
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val context = LocalContext.current
-    val image = remember {mutableStateOf<Uri?>(null) }
+    val imageUri = remember {NewDiceCollectionViewImageUri}
     val imageLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
         onResult = { uri ->
             uri?.let {
-                image.value = it
+                imageUri.value = it
             }
         }
     )
@@ -447,18 +449,18 @@ fun NewDiceCollectionView() {
             contentPadding = PaddingValues(0.dp),
             shape = RectangleShape,
             colors = (
-                    if (image.value != null) ButtonColors(Color.Transparent, Color.Transparent, Color.Transparent, Color.Transparent)
+                    if (imageUri.value != null) ButtonColors(Color.Transparent, Color.Transparent, Color.Transparent, Color.Transparent)
                     else ButtonDefaults.buttonColors()
                     ),
         ) {
-            if (image.value==null) {
+            if (imageUri.value==null) {
                 Text(
                     "select image (optional)",
                     fontSize = fontSize1,
                 )
             }
             else {
-                image.value?.let {
+                imageUri.value?.let {
                     val painter = rememberAsyncImagePainter(it)
                     Image(painter = painter,
                         null,
@@ -506,7 +508,7 @@ fun NewDiceCollectionView() {
                         // copy image to app files
                         val imageFile = File(context.filesDir, name)
                         if (imageFile.exists()) imageFile.delete() // if overwriting, delete the old image if it exists
-                        image.value?.let {
+                        imageUri.value?.let {
                             fileFromContentUri(context, it, imageFile) // make a new copy of image to save with the app files
                             newCollection.imagePath = imageFile.path
                         }
@@ -618,6 +620,13 @@ fun DiceCollectionCard(collection: DiceCollection) {
     }
 }
 
+// remember button states through orientation changes
+var diceCollectionViewSides = 6
+val diceCollectionViewChanges = mutableStateOf(false)
+fun resetDiceCollectionView() { // when exiting the collection view
+    diceCollectionViewSides = 6
+    diceCollectionViewChanges.value = false
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @SuppressLint("DefaultLocale")
@@ -625,7 +634,6 @@ fun DiceCollectionCard(collection: DiceCollection) {
 fun DiceCollectionView(collection:DiceCollection) {
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val context = LocalContext.current
-    var sides by remember { mutableIntStateOf(6) }
     val dice = remember {
         val list = mutableStateListOf<Die>()
         collection.dice.forEach {
@@ -633,7 +641,7 @@ fun DiceCollectionView(collection:DiceCollection) {
         }
         list
     }
-    val anyChanges = remember { mutableStateOf(false) }
+    var sides by remember { mutableIntStateOf(diceCollectionViewSides) }
     fun rollDie(die:Die) {
         die.roll = (1+appState.rng.nextInt().absoluteValue%die.sides).toShort()
     }
@@ -649,7 +657,7 @@ fun DiceCollectionView(collection:DiceCollection) {
                     onClick = {
                         if (dice.removeIf { die -> die === it }) {
                             collection.dice.remove(it)
-                            anyChanges.value = true
+                            diceCollectionViewChanges.value = true
                         }
                     },
                 ) {
@@ -664,7 +672,7 @@ fun DiceCollectionView(collection:DiceCollection) {
             onClick = {
                 dice.clear()
                 collection.dice.forEach {rollDie(it);dice.add(it)}
-                anyChanges.value = true
+                diceCollectionViewChanges.value = true
             },
         ) {
             Text("re-roll",
@@ -677,15 +685,14 @@ fun DiceCollectionView(collection:DiceCollection) {
     val buttonClose = @Composable {
         TextButton(
             onClick = {
-                if (anyChanges.value) {
+                if (diceCollectionViewChanges.value) {
                     saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
                     appState.notifications.save()
-                    anyChanges.value = false
                 }
                 appState.navigation.back()
             },
         ) {
-            Text((if (anyChanges.value) "save & close" else "close"),
+            Text((if (diceCollectionViewChanges.value) "save & close" else "close"),
                 fontSize = fontSize1,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.defaultMinSize(minWidth = 80.dp)
@@ -698,7 +705,7 @@ fun DiceCollectionView(collection:DiceCollection) {
                 collection.dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
                 dice.clear()
                 collection.dice.forEach {dice.add(it)}
-                anyChanges.value = true
+                diceCollectionViewChanges.value = true
             },
         ) {
             Text("sort",
@@ -713,7 +720,7 @@ fun DiceCollectionView(collection:DiceCollection) {
             verticalAlignment=Alignment.CenterVertically,
         ) {
             TextButton(
-                onClick = {if (sides>2) {sides--}},
+                onClick = {if (sides>2) {sides--;diceCollectionViewSides--}},
             ) {
                 Text(
                     "-",
@@ -726,13 +733,13 @@ fun DiceCollectionView(collection:DiceCollection) {
                     rollDie(newDie)
                     dice.add(newDie)
                     collection.dice.add(newDie)
-                    anyChanges.value = true
+                    diceCollectionViewChanges.value = true
                 },
             ){
                 DieIcon(Die(sides.toShort(), sides.toShort()))
                 //Text(sides.toString(), fontSize = 60.sp)
             }
-            TextButton(onClick={sides++},
+            TextButton(onClick={sides++;diceCollectionViewSides++},
             ){
                 Text(
                     "+",
@@ -888,7 +895,6 @@ fun ByteGenView() {
 @SuppressLint("DefaultLocale")
 @Composable
 fun StatisticsView() {
-    val string = remember { mutableStateOf("") }
     val gravData = remember { appState.sensors!!.gravData }
     Column (
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -906,21 +912,23 @@ fun StatisticsView() {
                 fontSize = fontSize1,
             )
         }
-
-        string.value = "Launches: "+appState.installState.timesLaunched.toString()
-        string.value += "\nSeed: "+appState.seed.toString()
+        val stringBuilder = StringBuilder()
+        stringBuilder.append("Launches: ")
+        stringBuilder.append(appState.installState.timesLaunched.toString())
+        stringBuilder.append("\nSeed: ")
+        stringBuilder.append(appState.seed.toString())
         val collections = appState.installState.diceCollections
-        string.value += String.format("\nCollections: %d", collections.size)
+        stringBuilder.append(String.format("\nCollections: %d", collections.size))
         var diceCount = 0
         collections.forEach {
             diceCount += it.value.dice.size
         }
-        string.value += String.format("\nCollection Dice: %d", diceCount)
+        stringBuilder.append(String.format("\nCollection Dice: %d", diceCount))
         gravData.value?.let {
-            string.value += String.format("\nGravity XYZ: %.3f, %.3f, %.3f", it.x, it.y, it.z)
+            stringBuilder.append(String.format("\nGravity XYZ: %.3f, %.3f, %.3f", it.x, it.y, it.z))
         }
         Text(
-            string.value,
+            stringBuilder.toString(),
             fontSize = fontSize1,
             lineHeight = fontSize1 * 1.5,
         )
@@ -934,7 +942,10 @@ fun PrimaryView() {
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val context = LocalContext.current
     val collections = appState.installState.diceCollections
-    val count = remember { mutableIntStateOf(collections.size) } // to detect updates to collections
+    var count by remember { mutableIntStateOf(collections.size) } // to detect updates to collections
+
+    resetDiceCollectionView()
+    NewDiceCollectionViewImageUri.value = null // reset
 
     val buttonModifier0 = Modifier
         .fillMaxWidth((if (landscape) 1F else .5F))
@@ -954,11 +965,11 @@ fun PrimaryView() {
                     }
                 }
                 // save instantly if something was cleared
-                if (count.intValue!=collections.size) {
+                if (count!=collections.size) {
                     saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
                     appState.notifications.save()
                 }
-                count.intValue = collections.size
+                count = collections.size
             },
             modifier = buttonModifier0
         ) {
@@ -1004,7 +1015,7 @@ fun PrimaryView() {
                 .verticalScroll(rememberScrollState(0)),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            if ((count.intValue>0) or (collections.size>0)) {
+            if ((count>0) or (collections.size>0)) {
                 collections.keys.sorted().forEach {
                     val collection = collections.getValue(it)
                     DiceCollectionCard(collection)
