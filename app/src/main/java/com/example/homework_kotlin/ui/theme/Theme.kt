@@ -11,7 +11,7 @@ val hue = 220F
 val sat = 0F
 private val DarkColorScheme = darkColorScheme(
     primary = Color.hsl(hue,.5F*sat,.4F),
-    secondary = Color.hsl(hue,.2F*sat,.4F, .5F),
+    secondary = Color.hsl(hue,.2F*sat,.4F, .3F),
     onPrimary = Color.hsl(hue,.5F*sat,.95F),
     background = Color.hsl(hue,.0F,.1F),
     surface = Color.hsl(hue,.0F,.1F),
@@ -19,7 +19,7 @@ private val DarkColorScheme = darkColorScheme(
 
 private val LightColorScheme = lightColorScheme(
     primary = Color.hsl(hue,.5F*sat,.4F),
-    secondary = Color.hsl(hue,.2F*sat,.4F, .5F),
+    secondary = Color.hsl(hue,.2F*sat,.4F, .3F),
     onPrimary = Color.hsl(hue,.5F*sat,.95F),
     background = Color.hsl(hue,.0F,.9F),
     surface = Color.hsl(hue,.0F,.9F),

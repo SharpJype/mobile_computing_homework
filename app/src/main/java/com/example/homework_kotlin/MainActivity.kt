@@ -33,11 +33,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -502,11 +504,11 @@ fun NewDiceCollectionView() {
                     if (name.isNotEmpty()) {
                         val newCollection = DiceCollection(name)
                         // copy image to app files
+                        val imageFile = File(context.filesDir, name)
+                        if (imageFile.exists()) imageFile.delete() // if overwriting, delete the old image if it exists
                         image.value?.let {
-                            val copiedFile =
-                                File(context.filesDir, name)// always make a new copy of image
-                            fileFromContentUri(context, it, copiedFile)
-                            newCollection.imagePath = copiedFile.path
+                            fileFromContentUri(context, it, imageFile) // make a new copy of image to save with the app files
+                            newCollection.imagePath = imageFile.path
                         }
                         appState.installState.diceCollections[name] = newCollection
                         saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
@@ -666,7 +668,9 @@ fun DiceCollectionView(collection:DiceCollection) {
             },
         ) {
             Text("re-roll",
-                fontSize = fontSize1
+                fontSize = fontSize1,
+                textAlign = TextAlign.Left,
+                modifier = Modifier.defaultMinSize(minWidth = 80.dp)
             )
         }
     }
@@ -682,7 +686,9 @@ fun DiceCollectionView(collection:DiceCollection) {
             },
         ) {
             Text((if (anyChanges.value) "save & close" else "close"),
-                fontSize = fontSize1
+                fontSize = fontSize1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.defaultMinSize(minWidth = 80.dp)
             )
         }
     }
@@ -696,7 +702,9 @@ fun DiceCollectionView(collection:DiceCollection) {
             },
         ) {
             Text("sort",
-                fontSize = fontSize1
+                fontSize = fontSize1,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.defaultMinSize(minWidth = 80.dp)
             )
         }
     }
@@ -705,11 +713,7 @@ fun DiceCollectionView(collection:DiceCollection) {
             verticalAlignment=Alignment.CenterVertically,
         ) {
             TextButton(
-                onClick = {
-                    if (sides>2) {
-                        sides--
-                    }
-                },
+                onClick = {if (sides>2) {sides--}},
             ) {
                 Text(
                     "-",
@@ -728,7 +732,7 @@ fun DiceCollectionView(collection:DiceCollection) {
                 DieIcon(Die(sides.toShort(), sides.toShort()))
                 //Text(sides.toString(), fontSize = 60.sp)
             }
-            TextButton(onClick={sides++}
+            TextButton(onClick={sides++},
             ){
                 Text(
                     "+",
