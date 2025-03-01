@@ -77,4 +77,6 @@ dependencies {
     implementation(libs.androidx.graphics.shapes)
     implementation("com.google.accompanist:accompanist-permissions:0.37.0")
 
+    implementation("androidx.core:core-splashscreen:1.0.0")
+
 }

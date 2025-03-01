@@ -97,7 +97,7 @@ import androidx.navigation.NavController
 import androidx.navigation.toRoute
 import coil.compose.rememberAsyncImagePainter
 import com.example.homework_kotlin.ui.theme.DefaultTheme
-import kotlinx.serialization.json.decodeToSequence
+
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -307,7 +307,7 @@ private fun fileFromContentUri(context: Context, contentUri: Uri, file:File) {
         }
         outputStream.flush()
     } catch (e: Exception) {
-        e.printStackTrace()
+        //e.printStackTrace()
     }
 }
 @Throws(IOException::class)
@@ -323,14 +323,20 @@ private fun copy(source: InputStream, target: OutputStream) {
 
 
 
+
+
+
+
+
 val fontSize0 = 15.sp
 val fontSize1 = 20.sp
 val fontSize2 = 30.sp
+val longSidePadding = 50.dp
+val shortSidePadding = 25.dp
 val appState = AppSessionState(
     0,
     Random(),
 )
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -344,6 +350,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
 
 @Composable
 fun LifecycleEventListener(onEvent:(event: Lifecycle.Event) -> Unit) {
@@ -364,10 +380,12 @@ fun LifecycleEventListener(onEvent:(event: Lifecycle.Event) -> Unit) {
 
 @Composable
 fun DieIcon(die:Die) {
+    val dieSize = 95.dp
+    val diePadding = 5.dp
     Box(
         modifier = Modifier
-            .size(100.dp)
-            .padding(5.dp)
+            .size(dieSize)
+            .padding(diePadding)
             .drawWithCache {
                 val roundedPolygon = RoundedPolygon(
                     numVertices = 3 + (die.sides - 1) / 3,
@@ -395,7 +413,7 @@ fun DieIcon(die:Die) {
             color = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top=27.dp),
+                .padding(top=(dieSize+diePadding)/4),
             textAlign = TextAlign.Center,
         )
     }
@@ -510,7 +528,7 @@ fun NewDiceCollectionView() {
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .padding(horizontal = 30.dp, vertical = 10.dp)
+                .padding(horizontal = longSidePadding, vertical = shortSidePadding)
                 .fillMaxSize()
         ) {
             Box (
@@ -533,7 +551,7 @@ fun NewDiceCollectionView() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceAround,
             modifier = Modifier
-                .padding(horizontal = 10.dp, vertical = 30.dp)
+                .padding(horizontal = shortSidePadding, vertical = longSidePadding)
                 .fillMaxSize()
         ) {
             Box (
@@ -642,16 +660,12 @@ fun DiceCollectionView(collection:DiceCollection) {
     val buttonRoll = @Composable {
         TextButton(
             onClick = {
-                dice.forEach {
-                    rollDie(it)
-                }
-                val updateDie = Die(1, 1)// force visual update to dice
-                dice.add(updateDie)
-                dice.remove(updateDie)
+                dice.clear()
+                collection.dice.forEach {rollDie(it);dice.add(it)}
                 anyChanges.value = true
             },
         ) {
-            Text("roll",
+            Text("re-roll",
                 fontSize = fontSize1
             )
         }
@@ -662,6 +676,7 @@ fun DiceCollectionView(collection:DiceCollection) {
                 if (anyChanges.value) {
                     saveInstallState(File(context.filesDir, INSTALL_STATE_FILENAME))
                     appState.notifications.save()
+                    anyChanges.value = false
                 }
                 appState.navigation.back()
             },
@@ -674,8 +689,9 @@ fun DiceCollectionView(collection:DiceCollection) {
     val buttonSort = @Composable {
         TextButton(
             onClick = {
-                dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
                 collection.dice.sortWith(comparator = {die1, die2 -> die1.roll-die2.roll})
+                dice.clear()
+                collection.dice.forEach {dice.add(it)}
                 anyChanges.value = true
             },
         ) {
@@ -726,7 +742,7 @@ fun DiceCollectionView(collection:DiceCollection) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .padding(horizontal = 30.dp, vertical = 10.dp)
+                .padding(horizontal = longSidePadding, vertical = shortSidePadding)
                 .fillMaxSize()
         ) {
             Column (
@@ -756,7 +772,7 @@ fun DiceCollectionView(collection:DiceCollection) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .padding(horizontal = 10.dp, vertical = 30.dp)
+                .padding(horizontal = shortSidePadding, vertical = longSidePadding)
                 .fillMaxSize()
         ) {
             Box (
@@ -851,14 +867,14 @@ fun ByteGenView() {
         Column (verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .padding(horizontal = 10.dp, vertical = 30.dp)
+                .padding(horizontal = shortSidePadding, vertical = longSidePadding)
                 .fillMaxSize()
         ) {content()}
     }
     else {
         Row (horizontalArrangement = Arrangement.SpaceAround,
             modifier = Modifier
-                .padding(horizontal = 10.dp, vertical = 30.dp)
+                .padding(horizontal = longSidePadding, vertical = shortSidePadding)
                 .fillMaxSize()
         ) {content()}
     }
@@ -874,7 +890,7 @@ fun StatisticsView() {
         //verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .padding(horizontal = 10.dp, vertical = 30.dp)
+            .padding(horizontal = shortSidePadding, vertical = longSidePadding)
             .fillMaxSize()
     ) {
         TextButton(
@@ -1002,7 +1018,7 @@ fun PrimaryView() {
             horizontalArrangement = Arrangement.SpaceEvenly,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 30.dp, vertical = 10.dp)
+                .padding(horizontal = longSidePadding, vertical = shortSidePadding)
         ) {
             Column (
                 verticalArrangement = Arrangement.Center,
@@ -1024,7 +1040,7 @@ fun PrimaryView() {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 30.dp)
+                .padding(horizontal = shortSidePadding, vertical = longSidePadding)
         ) {
             Box(modifier = Modifier.weight(1F)) {
                 cards()
@@ -1079,7 +1095,7 @@ fun NavigableViews() {
         appState.initialized = true
     }
     LifecycleEventListener {
-        println(it.targetState.name+" "+it.name)
+        //println(it.targetState.name+" "+it.name)
         when (it){
             Lifecycle.Event.ON_RESUME ->
             {
@@ -1111,4 +1127,3 @@ fun NavigableViews() {
         composable("statistics") {StatisticsView()}
     }
 }
-
