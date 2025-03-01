@@ -803,7 +803,7 @@ fun ByteGenView() {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .fillMaxWidth(.5F)
+                .fillMaxWidth((if (landscape) .5F else 1F))
         ) {
             Row(
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -887,7 +887,6 @@ fun StatisticsView() {
     val string = remember { mutableStateOf("") }
     val gravData = remember { appState.sensors!!.gravData }
     Column (
-        //verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .padding(horizontal = shortSidePadding, vertical = longSidePadding)
@@ -915,7 +914,6 @@ fun StatisticsView() {
         string.value += String.format("\nCollection Dice: %d", diceCount)
         gravData.value?.let {
             string.value += String.format("\nGravity XYZ: %.3f, %.3f, %.3f", it.x, it.y, it.z)
-            //string += String.format("\nOrientation: ??")
         }
         Text(
             string.value,
